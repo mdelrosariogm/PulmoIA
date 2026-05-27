@@ -1,23 +1,30 @@
 """
-extract_features_TR.py
-======================
-Extracción de features espectrales — RespiratoryDatabase@TR
+extract_features_ICBHI.py
+=========================
+Extracción de features espectrales — ICBHI 2017 Respiratory Sound Database
 
-Pipeline por ventana (una fila por ventana, igual que HF):
-  1. Carga el audio (cualquier sr)
+Pipeline por ventana (una fila por ventana, igual que HF y TR):
+  1. Carga el audio (frecuencia variable → resamplea a 4 kHz)
   2. Convierte a mono
   3. Resamplea a TARGET_SR (4 kHz) si es necesario
   4. Aplica filtro pasa-altos Butterworth orden 10 a 80 Hz
-  5. Ventaneo deslizante → features espectrales por ventana
-  6. Una fila por ventana con etiqueta diagnosis (COPD0-COPD4)
-  7. Guarda CSV + Excel
+  5. Parsea el .txt de anotaciones → ciclos respiratorios con flags
+     de crackle y wheeze (columnas 3 y 4)
+  6. Ventaneo deslizante → features espectrales por ventana
+  7. Etiqueta cada ventana por solapamiento con ciclos anotados
+  8. Una fila por ventana → CSV y Excel
 
-Estructura de salida (igual que features_HF.csv):
-  filename | source | patient_id | channel | t_start_s | t_end_s |
-  diagnosis | sr_original | resampled | features...
+Formato del archivo de anotaciones ICBHI:
+  t_inicio  t_fin   crackle  wheeze
+  0.036     1.207   0        0
+  3.550     5.750   1        0      ← crackle presente en este ciclo
+  5.750     7.879   1        0
+
+Nota: ICBHI no tiene stridor ni rhonchus en sus anotaciones.
+      Solo crackle y wheeze. has_stridor y has_rhonchus = 0 siempre.
 
 Uso:
-  python extract_features_TR.py --folder data/RDB --output outputs/features_TR
+  python extract_features_ICBHI.py --folder data/ICBHI --output outputs/features_ICBHI
 
 Dependencias:
   pip install numpy scipy librosa pandas openpyxl tqdm
@@ -46,29 +53,17 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ─── Parámetros globales ───────────────────────────────────────────────────────
-TARGET_SR  = 4_000
-HP_CUTOFF  = 80
+TARGET_SR  = 4_000   # Hz — igual que HF y TR
+HP_CUTOFF  = 80      # Hz
 HP_ORDER   = 10
-WINDOW_SEC = 1.0     # igual que HF
-HOP_SEC    = 0.5     # igual que HF
+WINDOW_SEC = 1.0     # igual que HF y TR
+HOP_SEC    = 0.5     # igual que HF y TR
 N_MFCC     = 14
 N_FFT      = 512
 HOP_FFT    = 128
 
-# ─── Diccionario de diagnósticos ──────────────────────────────────────────────
-DIAGNOSIS = {
-    "H002": "COPD4", "H003": "COPD4", "H004": "COPD4", "H005": "COPD4",
-    "H006": "COPD4", "H007": "COPD3", "H008": "COPD3", "H009": "COPD4",
-    "H010": "COPD3", "H011": "COPD4", "H012": "COPD4", "H013": "COPD4",
-    "H014": "COPD4", "H015": "COPD4", "H016": "COPD0", "H017": "COPD1",
-    "H018": "COPD2", "H021": "COPD0", "H022": "COPD4", "H023": "COPD4",
-    "H024": "COPD4", "H025": "COPD4", "H026": "COPD3", "H028": "COPD2",
-    "H029": "COPD1", "H030": "COPD2", "H031": "COPD2", "H032": "COPD4",
-    "H033": "COPD3", "H034": "COPD3", "H035": "COPD4", "H036": "COPD3",
-    "H037": "COPD0", "H038": "COPD2", "H039": "COPD1", "H040": "COPD0",
-    "H041": "COPD0", "H042": "COPD2", "H043": "COPD1", "H044": "COPD2",
-    "H045": "COPD1", "H050": "COPD0",
-}
+# Equipos de grabación válidos en ICBHI
+VALID_EQUIPMENT = {"AKGC417L", "LittC2SE", "Litt3200", "Meditron"}
 
 # ─── Filtro pasa-altos ────────────────────────────────────────────────────────
 def build_highpass(cutoff=HP_CUTOFF, order=HP_ORDER, fs=TARGET_SR):
@@ -89,6 +84,104 @@ def load_and_preprocess(filepath: str) -> tuple:
     signal = apply_highpass(signal)
     return signal, TARGET_SR, sr_orig, resampled
 
+# ─── Parser de anotaciones ICBHI ─────────────────────────────────────────────
+def parse_annotation_file(txt_path: str) -> list[dict]:
+    """
+    Parsea el archivo .txt de ICBHI.
+
+    Formato: t_inicio  t_fin  crackle  wheeze
+    (separado por tabs o espacios)
+
+    Returns:
+        list of dicts: [{"start": float, "end": float,
+                         "crackle": int, "wheeze": int}, ...]
+    """
+    cycles = []
+    try:
+        with open(txt_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                try:
+                    t_start  = float(parts[0])
+                    t_end    = float(parts[1])
+                    crackle  = int(parts[2])
+                    wheeze   = int(parts[3])
+                    cycles.append({
+                        "start":   t_start,
+                        "end":     t_end,
+                        "crackle": crackle,
+                        "wheeze":  wheeze,
+                    })
+                except ValueError:
+                    continue
+    except Exception as e:
+        log.warning("Error parseando %s: %s", txt_path, e)
+    return cycles
+
+
+def label_window_icbhi(t_start: float, t_end: float,
+                        cycles: list[dict]) -> dict:
+    """
+    Etiqueta una ventana [t_start, t_end] según solapamiento con ciclos.
+
+    Criterio: si un ciclo que contiene crackle/wheeze se solapa
+    con la ventana, la ventana hereda esa etiqueta.
+
+    ICBHI no tiene stridor ni rhonchus → siempre 0.
+    """
+    has_crackle = 0
+    has_wheeze  = 0
+
+    for cycle in cycles:
+        # Solapamiento temporal
+        if cycle["start"] < t_end and cycle["end"] > t_start:
+            if cycle["crackle"] == 1:
+                has_crackle = 1
+            if cycle["wheeze"] == 1:
+                has_wheeze = 1
+        # Optimización: si ya tenemos ambos no hace falta seguir
+        if has_crackle and has_wheeze:
+            break
+
+    return {
+        "has_wheeze":   has_wheeze,
+        "has_crackle":  has_crackle,
+        "has_stridor":  0,   # no disponible en ICBHI
+        "has_rhonchus": 0,   # no disponible en ICBHI
+    }
+
+# ─── Parser de nombre de archivo ICBHI ───────────────────────────────────────
+def parse_icbhi_filename(stem: str) -> dict | None:
+    """
+    Parsea el nombre de archivo ICBHI:
+    {PatientID}_{RecordingIndex}_{Location}_{Mode}_{Equipment}
+
+    Ejemplo: 101_1b1_Al_sc_Meditron
+    """
+    parts = stem.split("_")
+    if len(parts) < 5:
+        return None
+    try:
+        patient_id = parts[0]
+        rec_index  = parts[1]
+        location   = parts[2]
+        mode       = parts[3]
+        equipment  = "_".join(parts[4:])  # por si el equipo tiene _
+        return {
+            "patient_id": patient_id,
+            "rec_index":  rec_index,
+            "location":   location,
+            "mode":       mode,
+            "equipment":  equipment,
+        }
+    except Exception:
+        return None
+
 # ─── Features espectrales ─────────────────────────────────────────────────────
 def aggregate(values: np.ndarray) -> tuple:
     m  = float(np.mean(values))
@@ -98,7 +191,7 @@ def aggregate(values: np.ndarray) -> tuple:
 
 
 def spectral_features_window(frame: np.ndarray, fs: int) -> dict:
-    feats = {}
+    feats  = {}
     S_mag  = np.abs(librosa.stft(frame, n_fft=N_FFT, hop_length=HOP_FFT))
     freqs  = librosa.fft_frequencies(sr=fs, n_fft=N_FFT)
     power  = S_mag ** 2
@@ -161,7 +254,6 @@ VECTOR_KEYS = ["MFCC", "MFCC_delta", "MFCC_delta_delta"]
 
 
 def extract_window_features(frame: np.ndarray, fs: int) -> dict:
-    """Extrae y agrega features de una sola ventana."""
     fw  = spectral_features_window(frame, fs)
     row = {}
     for k in SCALAR_KEYS:
@@ -179,14 +271,13 @@ def extract_window_features(frame: np.ndarray, fs: int) -> dict:
     return row
 
 # ─── Pipeline principal ───────────────────────────────────────────────────────
-def parse_patient_id(filename: str) -> str | None:
-    m = re.match(r"(H\d+)", filename, re.IGNORECASE)
-    return m.group(1).upper() if m else None
-
-
 def run_extraction(folder: str, output: str):
     folder_path = Path(folder)
-    wav_files   = sorted(folder_path.glob("*.wav"))
+
+    # Buscar todos los .wav con su .txt correspondiente
+    # Excluir archivos que no son anotaciones de ciclos respiratorios
+    EXCLUDE_TXT = {"filename_differences.txt", "filename_format.txt"}
+    wav_files = sorted([f for f in folder_path.glob("*.wav")])
 
     if not wav_files:
         log.error("No se encontraron archivos .wav en: %s", folder)
@@ -205,18 +296,24 @@ def run_extraction(folder: str, output: str):
     resampled_count = 0
 
     for fpath in tqdm(wav_files, desc="Extrayendo features", unit="file"):
-        fname      = fpath.stem
-        patient_id = parse_patient_id(fname)
+        fname = fpath.stem
 
-        if patient_id is None:
-            skipped.append((fname, "No se pudo extraer ID de paciente"))
+        # Verificar que existe el .txt de anotaciones (no es un archivo excluido)
+        txt_path = fpath.parent / f"{fname}.txt"
+        if not txt_path.exists() or txt_path.name in EXCLUDE_TXT:
+            skipped.append((fname, "Sin archivo .txt de anotaciones"))
             continue
 
-        diagnosis = DIAGNOSIS.get(patient_id)
-        if diagnosis is None:
-            skipped.append((fname, f"ID '{patient_id}' no en diccionario"))
+        # Parsear nombre de archivo
+        meta = parse_icbhi_filename(fname)
+        if meta is None:
+            skipped.append((fname, "Nombre de archivo no reconocido"))
             continue
 
+        # Parsear anotaciones
+        cycles = parse_annotation_file(str(txt_path))
+
+        # Cargar y preprocesar audio
         try:
             signal, fs, sr_orig, resampled = load_and_preprocess(str(fpath))
         except Exception as e:
@@ -227,37 +324,38 @@ def run_extraction(folder: str, output: str):
             resampled_count += 1
 
         if len(signal) < win_samples:
-            # Señal más corta que una ventana → una sola ventana
-            starts = [0]
-        else:
-            starts = range(0, len(signal) - win_samples + 1, hop_samples)
+            skipped.append((fname, f"Señal muy corta: {len(signal)/fs:.1f}s"))
+            continue
 
-        channel = re.search(r"_(L\d+|R\d+)", fname, re.IGNORECASE)
-        ch      = channel.group(1).upper() if channel else "?"
+        # Ventaneo deslizante
+        starts = range(0, len(signal) - win_samples + 1, hop_samples)
 
         for s_idx in starts:
             t_start = s_idx / fs
-            t_end   = min((s_idx + win_samples) / fs, len(signal) / fs)
+            t_end   = (s_idx + win_samples) / fs
             frame   = signal[s_idx:s_idx + win_samples]
-            if len(frame) < win_samples:
-                frame = np.pad(frame, (0, win_samples - len(frame)))
 
             try:
                 feat_row = extract_window_features(frame, fs)
             except Exception:
                 continue
 
+            # Etiquetas por solapamiento con ciclos anotados
+            win_labels = label_window_icbhi(t_start, t_end, cycles)
+
             row = {
                 "filename":    fname,
-                "source":      "TR",
-                "patient_id":  patient_id,
-                "channel":     ch,
+                "source":      "ICBHI",
+                "patient_id":  meta["patient_id"],
+                "location":    meta["location"],
+                "mode":        meta["mode"],
+                "equipment":   meta["equipment"],
                 "t_start_s":   round(t_start, 3),
                 "t_end_s":     round(t_end,   3),
-                "diagnosis":   diagnosis,
                 "sr_original": sr_orig,
                 "resampled":   resampled,
             }
+            row.update(win_labels)
             row.update(feat_row)
             rows.append(row)
 
@@ -267,6 +365,15 @@ def run_extraction(folder: str, output: str):
 
     df = pd.DataFrame(rows)
 
+    # Reordenar columnas: metadatos → etiquetas → features
+    meta_cols  = ["filename", "source", "patient_id", "location",
+                  "mode", "equipment", "t_start_s", "t_end_s",
+                  "sr_original", "resampled"]
+    label_cols = ["has_wheeze", "has_crackle", "has_stridor", "has_rhonchus"]
+    feat_cols  = [c for c in df.columns if c not in meta_cols + label_cols]
+    df = df[meta_cols + label_cols + feat_cols]
+
+    # Guardar
     out_base  = Path(output)
     out_base.parent.mkdir(parents=True, exist_ok=True)
     csv_path  = out_base.with_suffix(".csv")
@@ -275,18 +382,31 @@ def run_extraction(folder: str, output: str):
     df.to_csv(csv_path, index=False)
     df.to_excel(xlsx_path, index=False, engine="openpyxl")
 
+    # Reporte
     log.info("─" * 55)
     log.info("✅  Ventanas extraídas: %d filas × %d columnas",
              len(df), len(df.columns))
     log.info("   CSV  → %s", csv_path)
     log.info("   XLSX → %s", xlsx_path)
+    log.info("   Archivos procesados: %d | Omitidos: %d",
+             len(wav_files) - len(skipped), len(skipped))
     if resampled_count:
-        log.info("   Archivos resampleados: %d", resampled_count)
+        log.info("   Archivos resampleados a %d Hz: %d",
+                 TARGET_SR, resampled_count)
 
-    log.info("\nDistribución de clases (ventanas):")
-    for label, count in df["diagnosis"].value_counts().items():
+    # Distribución de etiquetas
+    log.info("\nDistribución de etiquetas (ventanas positivas):")
+    for col in label_cols:
+        n_pos = int(df[col].sum())
+        pct   = n_pos / len(df) * 100
+        log.info("   %-15s: %6d / %d ventanas (%.1f%%)",
+                 col, n_pos, len(df), pct)
+
+    # Distribución por equipo
+    log.info("\nDistribución por equipo de grabación:")
+    for equip, count in df["equipment"].value_counts().items():
         pct = count / len(df) * 100
-        log.info("   %-8s: %6d ventanas (%.1f%%)", label, count, pct)
+        log.info("   %-15s: %6d ventanas (%.1f%%)", equip, count, pct)
 
     if skipped:
         log.warning("\n⚠️  Archivos omitidos (%d):", len(skipped))
@@ -296,12 +416,12 @@ def run_extraction(folder: str, output: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Extracción de features espectrales — RespiratoryDatabase@TR (por ventana)",
+        description="Extracción de features espectrales — ICBHI 2017 (por ventana)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--folder",  required=True,
-                        help="Carpeta con los archivos .wav de TR")
-    parser.add_argument("--output",  default="outputs/features_TR",
+                        help="Carpeta con archivos .wav y .txt de ICBHI")
+    parser.add_argument("--output",  default="outputs/features_ICBHI",
                         help="Prefijo de salida (.csv y .xlsx)")
     args = parser.parse_args()
     run_extraction(args.folder, args.output)
