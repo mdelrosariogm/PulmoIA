@@ -260,13 +260,45 @@ Por cada ventana de 1 segundo se extraen los siguientes descriptores, cada uno r
 
 ### Después de la extracción (ventanas de 1s)
 
-| Base de datos | Ventanas estimadas | Columnas | Uso en pipeline |
-|---|---|---|---|
-| HF_Lung_V1 | ~130,000 | ~163 | Paso 1: entrenar detector acústico |
-| RespiratoryDatabase@TR | ~15,000 | ~166 | Paso 2: clasificador COPD |
-| ICBHI 2017 | ~50,000 | ~163 | Paso 1: refuerzo del detector |
+| Base de datos | Archivos .wav | Ventanas reales | Columnas | Uso en pipeline |
+|---|---|---|---|---|
+| HF_Lung_V1 (steth_) | 4,504 | **130,616** | 169 | Paso 1: detector acústico |
+| ICBHI 2017 | 920 | **~37,800** | 169 | Paso 1: refuerzo detector |
+| RespiratoryDatabase@TR | ~500 | **~15,000** | 169 | Paso 2: clasificador COPD |
+| **Total** | **~5,924** | **~183,000** | | |
 
-> Los tamaños exactos se actualizarán una vez completada la extracción.
+> Ventana: 1s duración, 50% solapamiento (hop=0.5s). Valores de ICBHI y TR se actualizarán al finalizar extracción.
+
+**Distribución de etiquetas acústicas — HF_Lung_V1 (130,616 ventanas):**
+
+| Etiqueta | Ventanas positivas | % del total |
+|---|---|---|
+| has_crackle | 23,048 | 17.6% |
+| has_wheeze | 13,720 | 10.5% |
+| has_rhonchus | 9,173 | 7.0% |
+| has_stridor | 520 | 0.4% |
+| Normal (sin adventicios) | ~84,155 | ~64.4% |
+
+**Distribución de etiquetas acústicas — ICBHI 2017 (ciclos respiratorios):**
+
+| Contenido | Ciclos | % |
+|---|---|---|
+| Normal (sin adventicios) | 3,642 | 52.8% |
+| Solo crackle | 1,864 | 27.0% |
+| Solo wheeze | 886 | 12.8% |
+| Crackle + wheeze | 506 | 7.3% |
+| **Total** | **6,898** | |
+
+**Distribución de diagnósticos COPD — RespiratoryDatabase@TR (por paciente):**
+
+| Diagnóstico | Pacientes | Criterio FEV1/FVC |
+|---|---|---|
+| COPD4 (muy severo) | 17 | FEV1 < 30% |
+| COPD3 (severo) | 6 | 30% < FEV1 < 50% |
+| COPD2 (moderado) | 6 | 50% < FEV1 < 80% |
+| COPD0 (bajo riesgo) | 6 | PFT normal |
+| COPD1 (leve) | 5 | FEV1 ≥ 80% |
+| **Total** | **40** | |
 
 ---
 
