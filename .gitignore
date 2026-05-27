@@ -1,0 +1,44 @@
+# Datos crudos (NO versionar)
+data/RDB/
+data/ICBHI/
+*.wav
+*.mp3
+
+# Outputs generados
+outputs/
+*.csv
+*.xlsx
+
+# Modelos entrenados
+models/
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Ambiente virtual
+venv/
+vpulmoia/
+*.cfg
+Include/
+Lib/
+Scripts/
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
