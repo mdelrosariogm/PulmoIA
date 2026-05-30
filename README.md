@@ -306,48 +306,61 @@ Por cada ventana de 1 segundo se extraen los siguientes descriptores, cada uno r
 
 ### Requisitos
 
-- Python 3.10 o superior
+- [uv](https://docs.astral.sh/uv/) (gestor de entorno recomendado) — instala y fija Python 3.11 automáticamente
 - Git
 
-### Configuración del entorno
+### Configuración del entorno (recomendado: uv)
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/TU_USUARIO/pulmoia.git
+git clone https://github.com/mdelrosariogm/PulmoIA.git
 cd pulmoia
 
-# 2. Crear ambiente virtual
-python -m venv vpulmoia
+# 2. Crear entorno + instalar dependencias (uv descarga Python 3.11 y genera .venv)
+uv sync                        # núcleo (datos, audio, ML clásico)
+uv sync --extra mlops --extra api   # + MLflow, Prefect, FastAPI (fases 2–4)
 
-# 3. Activar el ambiente
-# macOS/Linux:
-source vpulmoia/bin/activate
-# Windows:
-vpulmoia\Scripts\activate
+# 3. Verificar instalación
+uv run python -c "import librosa, sklearn, xgboost, shap, pulmoia; print('todo ok')"
+```
 
-# 4. Instalar dependencias
-pip install --upgrade pip
+Todo comando del proyecto se ejecuta con el prefijo `uv run` (usa el `.venv` sin activarlo manualmente).
+También puedes activarlo: `source .venv/bin/activate` (macOS/Linux) o `.venv\Scripts\activate` (Windows).
+
+### Alternativa con conda
+
+```bash
+conda env create -f environment.yml
+conda activate pulmoia
 pip install -r requirements.txt
 ```
+
+> **Nota:** El proyecto fija Python 3.11 (ver `.python-version`). `uv` se encarga de esto automáticamente.
 
 ### Estructura del repositorio
 
 ```
 pulmoia/
+├── pyproject.toml             ← dependencias y config (uv, black, ruff, pytest)
+├── uv.lock                    ← lockfile reproducible
+├── .python-version            ← Python 3.11
 ├── data/
 │   ├── RDB/          ← audios TR (.wav) — no versionado
 │   ├── LUNGS/        ← audios HF (.wav + _label.txt) — no versionado
-│   ├── ICBHI/        ← audios ICBHI (.wav + .txt) — no versionado
-│   └── .gitkeep
-├── outputs/          ← CSVs y Excel generados — no versionado
-├── models/           ← modelos entrenados — no versionado
-├── src/              ← módulos reutilizables (futuro)
-├── scripts/          ← scripts auxiliares
-├── tests/            ← pruebas unitarias
-├── extract_features_TR.py    ← extracción RespiratoryDatabase@TR
-├── extract_features_HF.py    ← extracción HF_Lung_V1
-├── verify_labels_HF.py       ← verificación de etiquetado HF
-├── requirements.txt
+│   └── ICBHI/        ← audios ICBHI (.wav + .txt) — no versionado
+├── outputs/                   ← CSVs, Excel y figuras generadas — no versionado
+├── models/                    ← modelos/scalers entrenados — no versionado
+├── src/pulmoia/               ← paquete instalable
+│   ├── data/                  ← preparation.py, eda.py
+│   ├── features/              ← extract_hf.py, extract_icbhi.py, extract_tr.py
+│   ├── models/                ← entrenamiento, evaluación, inferencia
+│   ├── api/                   ← FastAPI
+│   └── monitoring/            ← drift y performance
+├── scripts/                   ← utilidades (commit.py)
+├── notebooks/                 ← 01_eda, 02_baseline, 03_experiments
+├── tests/                     ← pruebas unitarias
+├── configs/                   ← configuración de experimentos
+├── docs/                      ← planificación y guías
 └── README.md
 ```
 
@@ -355,14 +368,21 @@ pulmoia/
 
 ```bash
 # RespiratoryDatabase@TR (una fila por ventana, etiqueta: diagnosis)
-python extract_features_TR.py --folder data/RDB --output outputs/features_TR
+uv run python -m pulmoia.features.extract_tr --folder data/RDB --output outputs/features_TR
 
 # HF_Lung_V1 (una fila por ventana, etiquetas: has_wheeze, has_crackle...)
-python extract_features_HF.py --folder data/LUNGS --output outputs/features_HF
+uv run python -m pulmoia.features.extract_hf --folder data/LUNGS --output outputs/features_HF
 
-# Verificar etiquetado de HF antes de la extracción completa
-python verify_labels_HF.py --folder data/LUNGS
-python verify_labels_HF.py --folder data/LUNGS --file steth_20190801_09_46_05
+# ICBHI 2017 (una fila por ventana, multilabel)
+uv run python -m pulmoia.features.extract_icbhi --folder data/ICBHI --output outputs/features_ICBHI
+```
+
+### Preparación de datos (limpieza, split, escalado, SHAP)
+
+```bash
+uv run python -m pulmoia.data.preparation              # todas las bases
+uv run python -m pulmoia.data.preparation --db hf      # solo HF
+uv run python -m pulmoia.data.preparation --corr 0.85  # umbral de correlación
 ```
 
 ### Estructura de los archivos de salida
@@ -379,17 +399,75 @@ filename | source | patient_id | channel | t_start_s | t_end_s | diagnosis | sr_
 
 ---
 
+## 🔬 Pipeline Metodológico Completo
+
+El proyecto sigue una arquitectura de tres pasos secuenciales:
+
+### Paso 1 — Detector de Sonidos Adventicios
+**Datos:** HF_Lung_V1 (steth_) + ICBHI 2017 → ~168,000 ventanas de 1s  
+**Tarea:** Clasificación multilabel por ventana  
+**Etiquetas:** `has_wheeze`, `has_crackle`, `has_stridor`, `has_rhonchus`  
+**Split:** 70/30 **por archivo de audio** (no por ventana) para evitar data leakage  
+**Nota:** Las ventanas del mismo audio están correlacionadas entre sí — el split por archivo garantiza que todas las ventanas de un mismo audio estén en train O en test, nunca en ambos.
+
+```
+HF_Lung_V1 (steth_)  ┐
+                      ├─→ Modelo multilabel ─→ P(wheeze), P(crackle),
+ICBHI 2017           ┘                         P(stridor), P(rhonchus)
+```
+
+### Paso 2 — Inferencia sobre RespiratoryDatabase@TR
+**Datos:** Audios TR → ventanas de 1s  
+**Proceso:** El modelo del Paso 1 genera probabilidades acústicas por ventana  
+**Resultado:** Para cada audio TR se obtiene el perfil acústico:
+
+```
+Audio H002_L1 → ventanas → modelo Paso 1 → {
+    % ventanas con wheeze   : 45%
+    % ventanas con crackle  : 12%
+    % ventanas con stridor  : 0%
+    % ventanas con rhonchus : 8%
+}
+```
+
+### Paso 3 — Algoritmo de Asignación COPD (NO es un modelo ML)
+**Datos:** Perfiles acústicos de TR + etiquetas COPD0-COPD4  
+**Proceso:** Análisis estadístico de la prevalencia de eventos acústicos por nivel de COPD  
+**Resultado:** Perfil acústico por clase + umbrales de clasificación
+
+```
+COPD0: wheeze=X%,  crackle=Y%,  stridor=Z%,  rhonchus=W%
+COPD1: wheeze=X',  crackle=Y',  ...
+COPD2: ...
+COPD3: ...
+COPD4: wheeze=X'', crackle=Y'', ...
+→ Diferencias estadísticamente significativas (ANOVA)
+→ Umbrales definidos por percentiles
+→ Perfil acústico clínicamente interpretable
+```
+
+**¿Por qué un algoritmo de asignación y no un segundo modelo?**
+- TR tiene pocos datos (~40 pacientes) — insuficiente para entrenar un modelo robusto
+- La interpretabilidad es total y clínicamente coherente
+- Permite decir: *"COPD4 presenta 45% de ventanas con wheeze vs 12% en COPD0"*
+- Es metodológicamente más defendible en un proyecto de grado
+
+---
+
 ## 🗺️ Roadmap del Proyecto
 
 - [x] Extracción de features espectrales — RespiratoryDatabase@TR (por ventana)
 - [x] Extracción de features espectrales — HF_Lung_V1 steth_ (por ventana, multilabel)
+- [x] Extracción de features espectrales — ICBHI 2017 (por ventana, multilabel)
 - [x] Verificación de etiquetado por solapamiento temporal
-- [ ] Extracción de features espectrales — ICBHI 2017
-- [ ] Paso 1: Entrenamiento del detector de sonidos adventicios (HF + ICBHI)
-- [ ] Paso 2: Aplicación del detector a TR → embeddings acústicos
-- [ ] Paso 3: Clasificador de severidad COPD (features espectrales + embeddings)
+- [x] EDA y estadística descriptiva — 3 bases de datos (sweetviz)
+- [ ] Análisis y selección de features (varianza, correlación, MI, RF, XGBoost, SHAP)
+- [ ] Estandarización (StandardScaler) y guardado del scaler
+- [ ] Paso 1: Entrenamiento detector multilabel (HF + ICBHI) — split por audio
+- [ ] Paso 2: Inferencia del detector sobre TR → perfiles acústicos por audio
+- [ ] Paso 3: Análisis estadístico de perfiles acústicos por nivel COPD (ANOVA + umbrales)
 - [ ] Evaluación con validación cruzada por paciente
-- [ ] Análisis de importancia de features
+- [ ] Reporte final y visualizaciones clínicas
 
 ---
 

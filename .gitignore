@@ -1,16 +1,19 @@
 # Datos crudos (NO versionar)
 data/RDB/
 data/ICBHI/
+data/LUNGS/
 *.wav
 *.mp3
+*.rar
+*.zip
 
 # Outputs generados
 outputs/
 *.csv
 *.xlsx
 
-# Modelos entrenados
-models/
+# Modelos entrenados (solo el dir raíz, NO el subpaquete src/pulmoia/models/)
+/models/
 *.pkl
 *.joblib
 *.h5
@@ -25,11 +28,19 @@ __pycache__/
 
 # Ambiente virtual
 venv/
-vpulmoia/
-*.cfg
+vpulmoia312/
+.venv/
 Include/
 Lib/
 Scripts/
+
+# uv
+.uv/
+
+# MLflow / Prefect (artefactos locales)
+mlruns/
+mlartifacts/
+.prefect/
 
 # IDEs
 .vscode/

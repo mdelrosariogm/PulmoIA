@@ -1,0 +1,21 @@
+name: pulmoia
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - numpy
+    - scipy
+    - librosa
+    - pandas
+    - openpyxl
+    - tqdm
+    - scikit-learn
+    - xgboost
+    - shap
+    - matplotlib
+    - seaborn
+    - sweetviz
+    - setuptools
