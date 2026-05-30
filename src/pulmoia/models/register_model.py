@@ -78,21 +78,17 @@ def register_and_tag(client: MlflowClient, run, alias: str, stage: str):
     return mv
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Registrar y promover detectores (Fase 2.3)")
-    parser.add_argument("--production", default="xgboost",
-                        choices=["xgboost", "random_forest", "logreg"])
-    parser.add_argument("--staging", default="random_forest",
-                        choices=["xgboost", "random_forest", "logreg"])
-    args = parser.parse_args()
+def register_best(production: str = "xgboost", staging: str = "random_forest") -> dict:
+    """Registra y promueve el detector. Reutilizable por el pipeline de Prefect (Fase 3).
 
+    Devuelve {'production': (algo, version), 'staging': (algo, version) | None}.
+    """
     config.setup_mlflow(config.EXPERIMENT_DETECTOR)
     client = MlflowClient()
     exp = client.get_experiment_by_name(config.EXPERIMENT_DETECTOR)
     if exp is None:
         raise SystemExit("No existe el experimento. Ejecuta train_detector primero.")
 
-    # Asegura que el modelo registrado existe
     try:
         client.create_registered_model(
             config.REGISTERED_MODEL_DETECTOR,
@@ -102,15 +98,29 @@ def main():
         pass  # ya existe
 
     log.info("Registrando versiones en '%s':", config.REGISTERED_MODEL_DETECTOR)
-    prod_run = best_run_for_algo(client, exp.experiment_id, args.production)
-    register_and_tag(client, prod_run, alias="champion", stage="Production")
+    out = {}
+    prod_run = best_run_for_algo(client, exp.experiment_id, production)
+    mv_p = register_and_tag(client, prod_run, alias="champion", stage="Production")
+    out["production"] = (production, mv_p.version)
 
-    if args.staging and args.staging != args.production:
-        stg_run = best_run_for_algo(client, exp.experiment_id, args.staging)
-        register_and_tag(client, stg_run, alias="challenger", stage="Staging")
+    if staging and staging != production:
+        stg_run = best_run_for_algo(client, exp.experiment_id, staging)
+        mv_s = register_and_tag(client, stg_run, alias="challenger", stage="Staging")
+        out["staging"] = (staging, mv_s.version)
 
     log.info("Registry actualizado. UI: uv run mlflow ui --backend-store-uri %s",
              config.MLFLOW_TRACKING_URI)
+    return out
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Registrar y promover detectores (Fase 2.3)")
+    parser.add_argument("--production", default="xgboost",
+                        choices=["xgboost", "random_forest", "logreg"])
+    parser.add_argument("--staging", default="random_forest",
+                        choices=["xgboost", "random_forest", "logreg"])
+    args = parser.parse_args()
+    register_best(production=args.production, staging=args.staging)
 
 
 if __name__ == "__main__":

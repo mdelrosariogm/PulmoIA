@@ -225,17 +225,7 @@ def main():
     if args.smoke:
         args.algos, args.n_iter, args.cv, args.sample = ["xgboost"], 2, 2, 3000
 
-    config.setup_mlflow(config.EXPERIMENT_DETECTOR)
-    data = load_data()
-    data_search.sample_n = None if args.sample == 0 else args.sample
-    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s",
-             len(data[0]), len(data[3]), len(data[5]), args.algos, args.n_iter, args.cv,
-             data_search.sample_n)
-
-    results = {}
-    for algo in args.algos:
-        macro_auc, _ = train_algo(algo, data, args.n_iter, args.cv)
-        results[algo] = macro_auc
+    results = run_training(args.algos, n_iter=args.n_iter, cv=args.cv, sample=args.sample)
 
     log.info("=" * 60)
     best = max(results, key=results.get)
@@ -243,6 +233,23 @@ def main():
         marca = "  <== MEJOR" if a == best else ""
         log.info("  %-15s Macro ROC-AUC=%.4f%s", a, s, marca)
     log.info("Tracking: %s", config.MLFLOW_TRACKING_URI)
+
+
+def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000) -> dict:
+    """Entrena los algoritmos indicados y devuelve {algo: macro_test_roc_auc}.
+
+    Función reutilizable por el pipeline de Prefect (Fase 3).
+    """
+    config.setup_mlflow(config.EXPERIMENT_DETECTOR)
+    data = load_data()
+    data_search.sample_n = None if sample == 0 else sample
+    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s",
+             len(data[0]), len(data[3]), len(data[5]), algos, n_iter, cv, data_search.sample_n)
+    results = {}
+    for algo in algos:
+        macro_auc, _ = train_algo(algo, data, n_iter, cv)
+        results[algo] = macro_auc
+    return results
 
 
 if __name__ == "__main__":
