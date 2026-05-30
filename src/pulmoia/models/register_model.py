@@ -31,15 +31,22 @@ log = logging.getLogger(__name__)
 
 
 def best_run_for_algo(client: MlflowClient, exp_id: str, algo: str):
-    """Mejor run padre OvR de un algoritmo por Macro ROC-AUC en test."""
+    """Mejor run padre OvR *completo* (run_type=full) de un algoritmo por Macro ROC-AUC.
+
+    Excluye runs de prueba (run_type='smoke') para que nunca se promueva un modelo de juguete.
+    """
     runs = client.search_runs(
         [exp_id],
-        filter_string=f"tags.strategy = 'OvR' and tags.algo = '{algo}'",
+        filter_string=(
+            f"tags.strategy = 'OvR' and tags.algo = '{algo}' and tags.run_type = 'full'"
+        ),
         order_by=["metrics.macro_test_roc_auc DESC"],
         max_results=1,
     )
     if not runs:
-        raise SystemExit(f"No hay runs OvR para algo='{algo}'. Entrena primero.")
+        raise SystemExit(
+            f"No hay runs 'full' OvR para algo='{algo}'. Entrena (no smoke) primero."
+        )
     return runs[0]
 
 

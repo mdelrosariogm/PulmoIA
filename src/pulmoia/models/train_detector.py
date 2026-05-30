@@ -149,14 +149,18 @@ def train_one_label(algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_sea
                             "test_pr_auc": test_ap, "test_f1": test_f1}
 
 
-def train_algo(algo, data, n_iter, n_splits):
-    """Entrena el detector OvR completo para un algoritmo. Devuelve (macro_auc, detector)."""
+def train_algo(algo, data, n_iter, n_splits, run_type="full"):
+    """Entrena el detector OvR completo para un algoritmo. Devuelve (macro_auc, detector).
+
+    `run_type`: 'full' (apto para registro/producción) o 'smoke' (prueba, no registrable).
+    """
     X_tr, y_tr_df, groups, X_te, y_te_df, feats = data
     X_s, y_s_df, g_s = data_search(data)
 
     estimators, thresholds, per_label = {}, {}, {}
     with mlflow.start_run(run_name=algo) as parent:
-        mlflow.set_tags({"algo": algo, "strategy": "OvR", "stage": "experiment"})
+        mlflow.set_tags({"algo": algo, "strategy": "OvR", "stage": "experiment",
+                         "run_type": run_type})
         mlflow.log_params({"n_iter": n_iter, "cv_splits": n_splits, "n_features": len(feats),
                            "n_train": len(X_tr), "n_search": len(X_s)})
         for label in config.TARGETS:
@@ -225,7 +229,8 @@ def main():
     if args.smoke:
         args.algos, args.n_iter, args.cv, args.sample = ["xgboost"], 2, 2, 3000
 
-    results = run_training(args.algos, n_iter=args.n_iter, cv=args.cv, sample=args.sample)
+    results = run_training(args.algos, n_iter=args.n_iter, cv=args.cv, sample=args.sample,
+                           run_type="smoke" if args.smoke else "full")
 
     log.info("=" * 60)
     best = max(results, key=results.get)
@@ -235,19 +240,22 @@ def main():
     log.info("Tracking: %s", config.MLFLOW_TRACKING_URI)
 
 
-def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000) -> dict:
+def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000,
+                 run_type: str = "full") -> dict:
     """Entrena los algoritmos indicados y devuelve {algo: macro_test_roc_auc}.
 
     Función reutilizable por el pipeline de Prefect (Fase 3).
+    `run_type`: 'full' (registrable) o 'smoke' (prueba, excluido del registro).
     """
     config.setup_mlflow(config.EXPERIMENT_DETECTOR)
     data = load_data()
     data_search.sample_n = None if sample == 0 else sample
-    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s",
-             len(data[0]), len(data[3]), len(data[5]), algos, n_iter, cv, data_search.sample_n)
+    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s run_type=%s",
+             len(data[0]), len(data[3]), len(data[5]), algos, n_iter, cv,
+             data_search.sample_n, run_type)
     results = {}
     for algo in algos:
-        macro_auc, _ = train_algo(algo, data, n_iter, cv)
+        macro_auc, _ = train_algo(algo, data, n_iter, cv, run_type=run_type)
         results[algo] = macro_auc
     return results
 
