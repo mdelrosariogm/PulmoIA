@@ -1,0 +1,117 @@
+"""
+register_model.py
+=================
+Fase 2.3 — Model Registry.
+
+Registra varias versiones del detector en el Model Registry y las promueve:
+  - XGBoost      → Production (alias 'champion')   [mejor opción práctica]
+  - RandomForest → Staging    (alias 'challenger') [mejor Macro ROC-AUC, más lento]
+
+Cada versión se busca como el mejor run padre (estrategia OvR) de su algoritmo, por
+Macro ROC-AUC en test. Se versiona con tags y descripción.
+
+Uso:
+  uv run python -m pulmoia.models.register_model
+  uv run python -m pulmoia.models.register_model --production xgboost --staging random_forest
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+
+import mlflow
+from mlflow.tracking import MlflowClient
+
+from pulmoia import config
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
+                    datefmt="%H:%M:%S")
+log = logging.getLogger(__name__)
+
+
+def best_run_for_algo(client: MlflowClient, exp_id: str, algo: str):
+    """Mejor run padre OvR de un algoritmo por Macro ROC-AUC en test."""
+    runs = client.search_runs(
+        [exp_id],
+        filter_string=f"tags.strategy = 'OvR' and tags.algo = '{algo}'",
+        order_by=["metrics.macro_test_roc_auc DESC"],
+        max_results=1,
+    )
+    if not runs:
+        raise SystemExit(f"No hay runs OvR para algo='{algo}'. Entrena primero.")
+    return runs[0]
+
+
+def register_and_tag(client: MlflowClient, run, alias: str, stage: str):
+    """Registra el modelo de un run, lo etiqueta y lo promueve (stage + alias)."""
+    algo = run.data.tags.get("algo", "?")
+    macro_auc = run.data.metrics.get("macro_test_roc_auc", float("nan"))
+    macro_f1 = run.data.metrics.get("macro_test_f1", float("nan"))
+
+    mv = mlflow.register_model(f"runs:/{run.info.run_id}/model", config.REGISTERED_MODEL_DETECTOR)
+    name, ver = config.REGISTERED_MODEL_DETECTOR, mv.version
+
+    for k, v in {
+        "algo": algo,
+        "macro_test_roc_auc": f"{macro_auc:.4f}",
+        "macro_test_f1": f"{macro_f1:.4f}",
+        "dataset": "HF_ICBHI",
+    }.items():
+        client.set_model_version_tag(name, ver, k, v)
+
+    client.update_model_version(
+        name, ver,
+        description=(
+            f"Detector multilabel OvR ({algo}). Macro ROC-AUC test={macro_auc:.4f}, "
+            f"Macro F1={macro_f1:.4f}. HF+ICBHI, split por archivo, umbral por etiqueta."
+        ),
+    )
+    client.set_registered_model_alias(name, alias, ver)
+    try:
+        client.transition_model_version_stage(name, ver, stage=stage,
+                                               archive_existing_versions=False)
+        log.info("  %s v%s [%s] → stage=%s, alias='%s' (Macro AUC=%.4f)",
+                 name, ver, algo, stage, alias, macro_auc)
+    except Exception as e:
+        log.warning("  Stage no aplicado (%s); alias '%s' sí. (Macro AUC=%.4f)", e, alias, macro_auc)
+    return mv
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Registrar y promover detectores (Fase 2.3)")
+    parser.add_argument("--production", default="xgboost",
+                        choices=["xgboost", "random_forest", "logreg"])
+    parser.add_argument("--staging", default="random_forest",
+                        choices=["xgboost", "random_forest", "logreg"])
+    args = parser.parse_args()
+
+    config.setup_mlflow(config.EXPERIMENT_DETECTOR)
+    client = MlflowClient()
+    exp = client.get_experiment_by_name(config.EXPERIMENT_DETECTOR)
+    if exp is None:
+        raise SystemExit("No existe el experimento. Ejecuta train_detector primero.")
+
+    # Asegura que el modelo registrado existe
+    try:
+        client.create_registered_model(
+            config.REGISTERED_MODEL_DETECTOR,
+            description="Detector multilabel de sonidos adventicios (wheeze/crackle/stridor/rhonchus).",
+        )
+    except Exception:
+        pass  # ya existe
+
+    log.info("Registrando versiones en '%s':", config.REGISTERED_MODEL_DETECTOR)
+    prod_run = best_run_for_algo(client, exp.experiment_id, args.production)
+    register_and_tag(client, prod_run, alias="champion", stage="Production")
+
+    if args.staging and args.staging != args.production:
+        stg_run = best_run_for_algo(client, exp.experiment_id, args.staging)
+        register_and_tag(client, stg_run, alias="challenger", stage="Staging")
+
+    log.info("Registry actualizado. UI: uv run mlflow ui --backend-store-uri %s",
+             config.MLFLOW_TRACKING_URI)
+
+
+if __name__ == "__main__":
+    main()

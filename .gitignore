@@ -40,6 +40,7 @@ Scripts/
 # MLflow / Prefect (artefactos locales)
 mlruns/
 mlartifacts/
+mlflow.db
 .prefect/
 
 # IDEs
