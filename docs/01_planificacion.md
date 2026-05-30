@@ -169,12 +169,38 @@ fuerte desbalance (stridor ≈ 0.4%, crackle ≈ 17.6%) y comparable con la lite
 
 ---
 
-## 7. Criterios de aprobación de la Fase 1
+## 7. Baseline de rendimiento (Fase 1.3)
+
+Baselines de referencia (modelo trivial + regresión logística). Reproducible con
+`uv run python -m pulmoia.models.baseline`. Reporte: `outputs/baseline/baseline_report.md`.
+
+### Detector multilabel (HF + ICBHI) — test split por archivo
+| Modelo | Macro ROC-AUC | Macro F1 |
+|---|---|---|
+| Dummy (prior) | 0.500 | 0.000 |
+| **LogReg (balanced)** | **0.809** | 0.305 |
+
+> El baseline LogReg ya alcanza el umbral MVP (≥0.80). El objetivo ≥0.88 queda para los modelos de
+> Fase 2 (RF/XGBoost). El Macro F1 bajo es esperable: umbral 0.5 sin optimizar + clases raras (stridor 0.36%).
+
+### Clasificador COPD0–4 (TR) — StratifiedGroupKFold por paciente
+| Modelo | Balanced Acc | Macro F1 | MAE ordinal |
+|---|---|---|---|
+| Dummy (most frequent) | 0.200 | 0.115 | 1.425 |
+| **LogReg (balanced)** | **0.247** | 0.240 | 1.403 |
+
+> **Hallazgo clave:** clasificar COPD directamente desde features espectrales **apenas supera el azar**
+> (0.247 vs 0.200). Esto **justifica empíricamente la arquitectura de 3 pasos**: se necesita la
+> representación intermedia del detector de adventicios, no basta con los descriptores espectrales crudos.
+
+---
+
+## 8. Criterios de aprobación de la Fase 1
 
 - [x] Problema de ML definido y acotado
 - [x] Problema de negocio hipotético articulado
 - [x] Métricas de éxito con objetivos cuantitativos
 - [x] Alcance MVP vs. completo delimitado
 - [x] Timeline con roles/responsables
-- [ ] **Baseline de rendimiento establecido** (Fase 1.3 — pendiente de ejecutar)
-- [ ] Entorno `uv` + estructura `src/` montados (Fase 1.2 — pendiente)
+- [x] **Baseline de rendimiento establecido** (detector + COPD)
+- [x] Entorno `uv` + estructura `src/` montados
