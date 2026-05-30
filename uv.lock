@@ -1850,6 +1850,7 @@ dependencies = [
     { name = "seaborn" },
     { name = "shap", version = "0.50.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "shap", version = "0.51.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "skrebate" },
     { name = "sweetviz" },
     { name = "tabulate" },
     { name = "tqdm" },
@@ -1896,6 +1897,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11,<2.0" },
     { name = "seaborn", specifier = ">=0.12,<1.0" },
     { name = "shap", specifier = ">=0.44,<1.0" },
+    { name = "skrebate", specifier = ">=0.62" },
     { name = "sweetviz", specifier = ">=2.3,<3.0" },
     { name = "tabulate", specifier = ">=0.10.0" },
     { name = "tqdm", specifier = ">=4.65,<5.0" },
@@ -2542,6 +2544,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
 ]
+
+[[package]]
+name = "skrebate"
+version = "0.62"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ee/04/1fa0073d145cc38e1396ef21e8c6be998d152555c64d1d54db9ce8e2c62c/skrebate-0.62.tar.gz", hash = "sha256:b20dad4dc52f650e1f7960151314840f34251222cae0a78ac23d9f6d377ca558", size = 19835, upload-time = "2021-02-15T17:25:49.42Z" }
 
 [[package]]
 name = "slicer"

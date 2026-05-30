@@ -149,18 +149,19 @@ def train_one_label(algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_sea
                             "test_pr_auc": test_ap, "test_f1": test_f1}
 
 
-def train_algo(algo, data, n_iter, n_splits, run_type="full"):
+def train_algo(algo, data, n_iter, n_splits, run_type="full", feature_set="all"):
     """Entrena el detector OvR completo para un algoritmo. Devuelve (macro_auc, detector).
 
     `run_type`: 'full' (apto para registro/producción) o 'smoke' (prueba, no registrable).
+    `feature_set`: etiqueta del conjunto de features usado (p. ej. 'all', 'relieff').
     """
     X_tr, y_tr_df, groups, X_te, y_te_df, feats = data
     X_s, y_s_df, g_s = data_search(data)
 
     estimators, thresholds, per_label = {}, {}, {}
-    with mlflow.start_run(run_name=algo) as parent:
+    with mlflow.start_run(run_name=f"{algo}_{feature_set}") as parent:
         mlflow.set_tags({"algo": algo, "strategy": "OvR", "stage": "experiment",
-                         "run_type": run_type})
+                         "run_type": run_type, "feature_set": feature_set})
         mlflow.log_params({"n_iter": n_iter, "cv_splits": n_splits, "n_features": len(feats),
                            "n_train": len(X_tr), "n_search": len(X_s)})
         for label in config.TARGETS:
@@ -201,10 +202,13 @@ def data_search(data):
     return X_tr[idx], y_tr_df.iloc[idx].reset_index(drop=True), groups[idx]
 
 
-def load_data():
+def load_data(feature_subset=None):
     train = pd.read_csv(config.DETECTOR_DATA_DIR / "train_scaled.csv", low_memory=False)
     test = pd.read_csv(config.DETECTOR_DATA_DIR / "test_scaled.csv", low_memory=False)
     feats = config.feature_columns(train)
+    if feature_subset:
+        wanted = set(feature_subset)
+        feats = [f for f in feats if f in wanted]  # preserva orden, intersecta
     X_tr = train[feats].fillna(train[feats].median()).to_numpy()
     X_te = test[feats].fillna(train[feats].median()).to_numpy()
     y_tr = train[config.TARGETS].astype(int).reset_index(drop=True)
@@ -241,21 +245,23 @@ def main():
 
 
 def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000,
-                 run_type: str = "full") -> dict:
+                 run_type: str = "full", feature_subset=None, feature_set: str = "all") -> dict:
     """Entrena los algoritmos indicados y devuelve {algo: macro_test_roc_auc}.
 
     Función reutilizable por el pipeline de Prefect (Fase 3).
     `run_type`: 'full' (registrable) o 'smoke' (prueba, excluido del registro).
+    `feature_subset`: lista de features a usar (None = todas las disponibles).
+    `feature_set`: etiqueta del conjunto (para distinguir runs en MLflow).
     """
     config.setup_mlflow(config.EXPERIMENT_DETECTOR)
-    data = load_data()
+    data = load_data(feature_subset)
     data_search.sample_n = None if sample == 0 else sample
-    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s run_type=%s",
+    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s run_type=%s set=%s",
              len(data[0]), len(data[3]), len(data[5]), algos, n_iter, cv,
-             data_search.sample_n, run_type)
+             data_search.sample_n, run_type, feature_set)
     results = {}
     for algo in algos:
-        macro_auc, _ = train_algo(algo, data, n_iter, cv, run_type=run_type)
+        macro_auc, _ = train_algo(algo, data, n_iter, cv, run_type=run_type, feature_set=feature_set)
         results[algo] = macro_auc
     return results
 

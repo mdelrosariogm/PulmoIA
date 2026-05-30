@@ -22,6 +22,7 @@ dependencies = [
     "seaborn>=0.12,<1.0",
     "sweetviz>=2.3,<3.0",
     "tabulate>=0.10.0",
+    "skrebate>=0.62",
 ]
 
 # ── Extras por fase (se instalan cuando arranca cada fase) ─────────────────────
