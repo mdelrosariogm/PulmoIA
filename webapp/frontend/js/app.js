@@ -156,6 +156,12 @@ function updateResultMeta(name, age) {
 }
 
 function startProcessing() {
+  // Exige un archivo real: sin audio NO hay resultado (evita el COPD2 de demo).
+  if (!selectedFile) {
+    alert('Primero sube un archivo de audio (.wav) de auscultación pulmonar.');
+    return;
+  }
+
   showScreen('processing');
   startWaveAnimation();
 
@@ -163,21 +169,18 @@ function startProcessing() {
   const pName = (document.getElementById('patientName') || {}).value || '';
   const pAge = (document.getElementById('patientAge') || {}).value || '';
 
-  // Predicción REAL en paralelo a la animación (si hay un archivo cargado).
-  let resultPromise = Promise.resolve(null);
-  if (selectedFile) {
-    const fd = new FormData();
-    fd.append('audio', selectedFile);
-    fd.append('role', currentRole);
-    if (pName.trim()) fd.append('patient_name', pName.trim());
-    if (pAge) fd.append('patient_age', pAge);
-    const symptoms = Array.from(document.querySelectorAll('.symptom-check input:checked'))
-      .map(c => (c.parentElement.textContent || '').trim()).filter(Boolean);
-    if (symptoms.length) fd.append('symptoms', symptoms.join(', '));
-    resultPromise = fetch('/api/v1/analyze', { method: 'POST', body: fd })
-      .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
-      .catch(err => { console.error('Error de análisis:', err); return null; });
-  }
+  const fd = new FormData();
+  fd.append('audio', selectedFile);
+  fd.append('role', currentRole);
+  if (pName.trim()) fd.append('patient_name', pName.trim());
+  if (pAge) fd.append('patient_age', pAge);
+  const symptoms = Array.from(document.querySelectorAll('.symptom-check input:checked'))
+    .map(c => (c.parentElement.textContent || '').trim()).filter(Boolean);
+  if (symptoms.length) fd.append('symptoms', symptoms.join(', '));
+
+  const resultPromise = fetch('/api/v1/analyze', { method: 'POST', body: fd })
+    .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+    .catch(err => { console.error('Error de análisis:', err); return null; });
 
   let step = 1;
   if (procTimer) clearInterval(procTimer);
@@ -190,12 +193,13 @@ function startProcessing() {
       resultPromise.then(api => {
         setTimeout(() => {
           stopWaveAnimation();
-          if (api === null && selectedFile) {
-            alert('No se pudo analizar el audio. Verifica que el archivo sea una auscultación válida (.wav).');
+          if (!api || !Number.isInteger(api.copd_level)) {
+            alert('No se pudo analizar el audio. Verifica que sea una auscultación válida (.wav).');
+            showScreen('upload');
+            return;
           }
-          const level = (api && Number.isInteger(api.copd_level)) ? api.copd_level : 2;
           updateResultMeta(pName, pAge);
-          showResult(level, api);
+          showResult(api.copd_level, api);  // SIEMPRE el resultado real del modelo
           showScreen('results');
         }, 600);
       });
