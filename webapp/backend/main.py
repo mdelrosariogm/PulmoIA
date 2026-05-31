@@ -43,6 +43,33 @@ async def no_cache(request, call_next):
     return response
 
 
+@app.on_event("startup")
+def _warmup():
+    """Precalienta numba/librosa con un audio sintético para que el PRIMER análisis
+    real del usuario sea rápido (evita el JIT de ~25s en la primera petición)."""
+    try:
+        import io
+        import wave
+
+        import numpy as np
+
+        from pulmoia.serving.inference import predict_from_audio_bytes
+
+        sr = 8000
+        t = np.linspace(0, 3, sr * 3, endpoint=False)
+        sig = (np.sin(2 * np.pi * 300 * t) * 0.3 * 32767).astype("<i2")
+        b = io.BytesIO()
+        w = wave.open(b, "wb")
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(sig.tobytes())
+        w.close()
+        predict_from_audio_bytes(b.getvalue())
+    except Exception:
+        pass  # el warmup es best-effort; no debe impedir el arranque
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "PulmoIA API", "version": "1.0.0"}
