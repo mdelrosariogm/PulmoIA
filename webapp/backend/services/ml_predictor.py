@@ -76,4 +76,5 @@ class MLPredictor:
             emergency=meta["emergency"],
             features_used=len(self.bundle["detector"].feature_names),
             model_version=str(self.model_version),
+            distribution=r.get("distribution", {}),
         )

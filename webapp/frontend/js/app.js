@@ -77,6 +77,7 @@ function scrollToAbout() {
 // ─── ROLE LOGIC ───────────────────────────────────────────
 let currentRole = 'medico';
 let selectedFile = null;   // audio cargado para análisis real
+let currentDistribution = null;  // distribución de probabilidad COPD0-4 del último análisis
 
 function startAsRole(role) {
   currentRole = role;
@@ -298,6 +299,11 @@ function stopWaveAnimation() {
 function showResult(level, api) {
   const d = COPD[level];
 
+  // Guarda la distribución real del modelo (cuando viene de un análisis).
+  if (api && api.distribution && Object.keys(api.distribution).length) {
+    currentDistribution = api.distribution;
+  }
+
   // badge card
   const badge = document.getElementById('resultBadge');
   badge.style.background = d.bg;
@@ -313,8 +319,14 @@ function showResult(level, api) {
   document.getElementById('resultSublabel').style.color = d.color;
   document.getElementById('resultName').textContent = d.name;
   document.getElementById('resultDesc').textContent = d.recBody.substring(0, 80) + '…';
-  document.getElementById('resultConf').textContent =
-    (api && typeof api.confidence === 'number') ? (Math.round(api.confidence * 100) + '%') : d.conf;
+  // Confianza = probabilidad REAL del nivel mostrado (de la distribución del modelo).
+  let confText = d.conf;
+  if (currentDistribution && currentDistribution['COPD' + level] != null) {
+    confText = Math.round(currentDistribution['COPD' + level] * 100) + '%';
+  } else if (api && typeof api.confidence === 'number') {
+    confText = Math.round(api.confidence * 100) + '%';
+  }
+  document.getElementById('resultConf').textContent = confText;
 
   // metrics
   document.getElementById('metFev1fvc').textContent = d.fev1fvc;
@@ -339,14 +351,18 @@ function showResult(level, api) {
   // emergency button
   document.getElementById('emergencyBtn').style.display = d.emergency ? 'flex' : 'none';
 
-  // demo chips
+  // Pestañas por nivel: muestran el % REAL de cada COPD y permiten navegar.
   for (let i = 0; i <= 4; i++) {
     const chip = document.getElementById('chip' + i);
     const c = COPD[i];
+    const pct = (currentDistribution && currentDistribution['COPD' + i] != null)
+      ? ' · ' + Math.round(currentDistribution['COPD' + i] * 100) + '%' : '';
+    chip.textContent = c.sublabel + pct;
     chip.classList.toggle('selected', i === level);
     chip.style.background = i === level ? c.color : 'transparent';
     chip.style.borderColor = c.color;
     chip.style.color = i === level ? '#0b1f3a' : c.color;
+    chip.style.fontWeight = i === level ? '800' : '600';
   }
 }
 

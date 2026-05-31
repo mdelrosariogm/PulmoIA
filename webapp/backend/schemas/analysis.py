@@ -33,6 +33,7 @@ class AnalysisResult(BaseModel):
     emergency: bool = False
     features_used: int = Field(..., description="Número de features MFCC utilizados")
     model_version: str = "1.0.0"
+    distribution: dict = Field(default_factory=dict, description="Probabilidad por nivel COPD0-4")
 
 
 class ErrorResponse(BaseModel):

@@ -87,9 +87,15 @@ def _predict_from_features(feats: pd.DataFrame, n_audios: int) -> dict:
 
     copd_model = bundle["copd_model"]
     y_copd = int(copd_model.predict(x_copd)[0])
+    distribution = {}
     if hasattr(copd_model, "predict_proba"):
         probs = copd_model.predict_proba(x_copd)[0]
         confidence = float(probs[list(copd_model.classes_).index(y_copd)])
+        # Probabilidad por nivel COPD0–4 (para mostrar la distribución completa).
+        distribution = {
+            bundle["copd_classes"][int(c)]: round(float(probs[i]), 4)
+            for i, c in enumerate(copd_model.classes_)
+        }
     else:
         confidence = float("nan")
 
@@ -97,6 +103,7 @@ def _predict_from_features(feats: pd.DataFrame, n_audios: int) -> dict:
         "copd": bundle["copd_classes"][y_copd],
         "copd_level": y_copd,
         "confidence": round(confidence, 4),
+        "distribution": distribution,
         "n_ventanas": int(len(feats)),
         "n_audios": n_audios,
         "perfil_acustico": perfil,
