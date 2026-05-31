@@ -35,6 +35,14 @@ app.add_middleware(
 app.include_router(analysis_router, prefix="/api/v1")
 
 
+@app.middleware("http")
+async def no_cache(request, call_next):
+    """Evita que el navegador cachee el frontend (siempre sirve la versión actual)."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "PulmoIA API", "version": "1.0.0"}

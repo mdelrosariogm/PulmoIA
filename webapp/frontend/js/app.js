@@ -143,9 +143,25 @@ const STEPS_CONFIG = [
   { done: false, active: false, badge: 'En espera',  name: 'Determinación de triage EPOC', progress: 100 }
 ];
 
+function updateResultMeta(name, age) {
+  const meta = document.getElementById('resultMeta');
+  if (!meta) return;
+  const roleLabel = currentRole === 'paciente' ? 'Paciente' : 'Médico General';
+  const fecha = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  meta.innerHTML =
+    `<strong>Paciente:</strong> ${name || '—'} &nbsp;·&nbsp; ` +
+    `<strong>Edad:</strong> ${age ? age + ' años' : '—'} &nbsp;·&nbsp; ` +
+    `<strong>Fecha:</strong> ${fecha} &nbsp;·&nbsp; ` +
+    `<strong>Rol:</strong> ${roleLabel}`;
+}
+
 function startProcessing() {
   showScreen('processing');
   startWaveAnimation();
+
+  // Datos del paciente (para enviar y para mostrar en el resultado)
+  const pName = (document.getElementById('patientName') || {}).value || '';
+  const pAge = (document.getElementById('patientAge') || {}).value || '';
 
   // Predicción REAL en paralelo a la animación (si hay un archivo cargado).
   let resultPromise = Promise.resolve(null);
@@ -153,10 +169,8 @@ function startProcessing() {
     const fd = new FormData();
     fd.append('audio', selectedFile);
     fd.append('role', currentRole);
-    const nm = document.getElementById('patientName');
-    const ag = document.getElementById('patientAge');
-    if (nm && nm.value.trim()) fd.append('patient_name', nm.value.trim());
-    if (ag && ag.value) fd.append('patient_age', ag.value);
+    if (pName.trim()) fd.append('patient_name', pName.trim());
+    if (pAge) fd.append('patient_age', pAge);
     const symptoms = Array.from(document.querySelectorAll('.symptom-check input:checked'))
       .map(c => (c.parentElement.textContent || '').trim()).filter(Boolean);
     if (symptoms.length) fd.append('symptoms', symptoms.join(', '));
@@ -176,7 +190,11 @@ function startProcessing() {
       resultPromise.then(api => {
         setTimeout(() => {
           stopWaveAnimation();
+          if (api === null && selectedFile) {
+            alert('No se pudo analizar el audio. Verifica que el archivo sea una auscultación válida (.wav).');
+          }
           const level = (api && Number.isInteger(api.copd_level)) ? api.copd_level : 2;
+          updateResultMeta(pName, pAge);
           showResult(level, api);
           showScreen('results');
         }, 600);
