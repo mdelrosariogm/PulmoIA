@@ -1,0 +1,20 @@
+# ── API ──────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9       # para UploadFile
+pydantic==2.7.1
+
+# ── DSP + Features ───────────────────────────────────────────
+librosa==0.10.2               # carga de audio + MFCC
+soundfile==0.12.1             # backend de lectura WAV/FLAC
+numpy==1.26.4
+scipy==1.13.0                 # filtros señal (Butterworth, Wiener)
+
+# ── ML ───────────────────────────────────────────────────────
+scikit-learn==1.4.2           # clasificadores (SVM, RF, GradientBoosting)
+joblib==1.4.2                 # serialización de modelos
+imbalanced-learn==0.12.2      # SMOTE para clases desbalanceadas
+
+# ── Utilidades ───────────────────────────────────────────────
+python-dotenv==1.0.1
+httpx==0.27.0                 # cliente HTTP para tests

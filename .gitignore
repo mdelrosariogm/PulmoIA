@@ -4,6 +4,7 @@ data/ICBHI/
 data/LUNGS/
 *.wav
 *.mp3
+*.mp4
 *.rar
 *.zip
 

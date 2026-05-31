@@ -10,13 +10,21 @@ Carga el bundle autónomo (sin MLflow) y ejecuta la cadena completa:
 
 from __future__ import annotations
 
+import io
 import pickle
 
+import librosa
 import numpy as np
 import pandas as pd
+from scipy.signal import sosfilt
 
 from pulmoia import config
-from pulmoia.features.extract_tr import extract_window_rows, load_and_preprocess
+from pulmoia.features.extract_tr import (
+    _HP_SOS,
+    TARGET_SR,
+    extract_window_rows,
+    load_and_preprocess,
+)
 
 _BUNDLE = None
 
@@ -41,24 +49,29 @@ def features_from_wav(path) -> pd.DataFrame:
     return pd.DataFrame(extract_window_rows(signal, fs))
 
 
-def predict_from_wavs(paths) -> dict:
-    """Cadena completa sobre uno o varios wav (se agregan todas sus ventanas)."""
+def features_from_bytes(audio_bytes: bytes) -> pd.DataFrame:
+    """Igual que features_from_wav pero desde bytes en memoria (uploads de la web)."""
+    signal, sr_orig = librosa.load(io.BytesIO(audio_bytes), sr=None, mono=True)
+    if sr_orig != TARGET_SR:
+        signal = librosa.resample(signal, orig_sr=sr_orig, target_sr=TARGET_SR)
+    signal = sosfilt(_HP_SOS, signal)  # mismo pasa-altos que el pipeline batch
+    return pd.DataFrame(extract_window_rows(signal, TARGET_SR))
+
+
+def _predict_from_features(feats: pd.DataFrame, n_audios: int) -> dict:
+    """Cadena: features por ventana → detector → perfil → COPD0–4 + confianza."""
     bundle = load_bundle()
-    frames = [features_from_wav(p) for p in paths]
-    feats = pd.concat([f for f in frames if not f.empty], ignore_index=True) if frames else pd.DataFrame()
     if feats.empty:
-        raise ValueError("No se extrajeron ventanas de los audios (¿archivos válidos?).")
+        raise ValueError("No se extrajeron ventanas del audio (¿archivo válido?).")
 
     feats127 = bundle["feats127"]
     missing = [c for c in feats127 if c not in feats.columns]
     if missing:
         raise ValueError(f"Faltan {len(missing)} features esperadas: {missing[:3]}...")
 
-    X = feats[feats127].fillna(0.0)
-    Xs = pd.DataFrame(bundle["scaler"].transform(X), columns=feats127)
-
+    Xs = pd.DataFrame(bundle["scaler"].transform(feats[feats127].fillna(0.0)), columns=feats127)
     detector = bundle["detector"]
-    proba = detector.predict_proba(Xs)   # DataFrame (n, labels)
+    proba = detector.predict_proba(Xs)
     pred = detector.predict(Xs)
     labels = bundle["detector_labels"]
 
@@ -69,13 +82,33 @@ def predict_from_wavs(paths) -> dict:
     }
     meanp = {f"meanp_{lab}": float(proba[lab].mean()) for lab in labels}
     x_copd = np.array([[meanp[f] for f in bundle["profile_feats"]]])
-    y_copd = int(bundle["copd_model"].predict(x_copd)[0])
-    copd = bundle["copd_classes"][y_copd]
+
+    copd_model = bundle["copd_model"]
+    y_copd = int(copd_model.predict(x_copd)[0])
+    if hasattr(copd_model, "predict_proba"):
+        probs = copd_model.predict_proba(x_copd)[0]
+        confidence = float(probs[list(copd_model.classes_).index(y_copd)])
+    else:
+        confidence = float("nan")
 
     return {
-        "copd": copd,
+        "copd": bundle["copd_classes"][y_copd],
+        "copd_level": y_copd,
+        "confidence": round(confidence, 4),
         "n_ventanas": int(len(feats)),
-        "n_audios": len(paths),
+        "n_audios": n_audios,
         "perfil_acustico": perfil,
         "version": bundle.get("version", {}),
     }
+
+
+def predict_from_wavs(paths) -> dict:
+    """Cadena completa sobre uno o varios wav (se agregan todas sus ventanas)."""
+    frames = [features_from_wav(p) for p in paths]
+    feats = pd.concat([f for f in frames if not f.empty], ignore_index=True) if frames else pd.DataFrame()
+    return _predict_from_features(feats, len(paths))
+
+
+def predict_from_audio_bytes(audio_bytes: bytes) -> dict:
+    """Cadena completa sobre el contenido de un audio en memoria (upload web)."""
+    return _predict_from_features(features_from_bytes(audio_bytes), 1)

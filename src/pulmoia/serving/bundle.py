@@ -20,7 +20,7 @@ import pickle
 
 import mlflow
 import pandas as pd
-from sklearn.neighbors import NearestCentroid
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -49,9 +49,14 @@ def build_bundle() -> dict:
     df = pd.read_csv(PROFILES)
     X = df[config.COPD_PROFILE_FEATS].to_numpy()
     y = df["diagnosis"].map(config.COPD_ORDER).to_numpy()
-    copd_model = make_pipeline(StandardScaler(), NearestCentroid())
+    # LogReg multinomial: da predict_proba → confianza real para la web.
+    copd_model = make_pipeline(
+        StandardScaler(),
+        LogisticRegression(max_iter=2000, class_weight="balanced",
+                           random_state=config.RANDOM_STATE),
+    )
     copd_model.fit(X, y)
-    log.info("Modelo COPD (NearestCentroid) entrenado con %d pacientes", len(df))
+    log.info("Modelo COPD (LogReg multinomial) entrenado con %d pacientes", len(df))
 
     bundle = {
         "detector": detector,
@@ -61,7 +66,7 @@ def build_bundle() -> dict:
         "copd_model": copd_model,
         "profile_feats": config.COPD_PROFILE_FEATS,
         "copd_classes": list(config.COPD_ORDER.keys()),
-        "version": {"detector": "pulmoia_detector@champion", "copd": "nearest_centroid_all"},
+        "version": {"detector": "pulmoia_detector@champion", "copd": "logreg_all"},
     }
     return bundle
 
