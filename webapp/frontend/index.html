@@ -139,6 +139,12 @@
       </svg>
       Acerca de
     </button>
+    <button class="mob-nav-item" id="mob-btn-modelo" onclick="navMobile('modelo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>
+      </svg>
+      Modelo
+    </button>
     <button class="mob-nav-item" id="mob-btn-impacto" onclick="navMobile('impacto')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -205,6 +211,7 @@
     <li><button onclick="showScreen('upload'); setActiveNav(this)">Analizar</button></li>
     <li><button onclick="showScreen('history'); setActiveNav(this)">Historial</button></li>
     <li><button onclick="showScreen('about'); setActiveNav(this)">Acerca de</button></li>
+    <li><button onclick="showScreen('modelo'); setActiveNav(this)">Modelo</button></li>
     <li><button onclick="showScreen('impacto'); setActiveNav(this)">Impacto</button></li>
     <li><button onclick="showScreen('contacto'); setActiveNav(this)">Contáctanos</button></li>
   </ul>
@@ -1236,6 +1243,201 @@
         únicamente escuchando la auscultación y ayudando a mejorar las
         <span class="hl">métricas y precisión de clasificación</span> de PulmoIA.
       </p>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: MODELO — Resumen técnico del entrenamiento
+══════════════════════════════════════════════════════ -->
+<section id="screen-modelo" class="screen">
+  <div class="about-container fade-in">
+
+    <div class="about-eyebrow-tag">Resumen Ejecutivo &nbsp;·&nbsp; Entrenamiento &nbsp;·&nbsp; MLOps</div>
+    <h1 class="about-main-title">EL MODELO</h1>
+    <p class="about-lead">
+      Cómo se entrenó PulmoIA: datos, selección de características, comparativa de modelos,
+      resultados y decisiones — de extremo a extremo.
+    </p>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Datos ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Datos</span></div>
+      <h2>¿Con <em>cuántos datos</em> entrenamos?</h2>
+      <p class="about-body">
+        Tres bases de auscultación pulmonar, procesadas en <strong>ventanas de 1 segundo</strong>
+        (50% de solapamiento) con un pipeline DSP común (mono · 4&nbsp;kHz · pasa-altos 80&nbsp;Hz).
+      </p>
+      <div class="mdl-stats">
+        <div class="mdl-stat"><div class="mdl-stat-num">130,616</div><div class="mdl-stat-lbl">ventanas HF_Lung_V1</div></div>
+        <div class="mdl-stat"><div class="mdl-stat-num">~37,800</div><div class="mdl-stat-lbl">ventanas ICBHI 2017</div></div>
+        <div class="mdl-stat"><div class="mdl-stat-num">21,158</div><div class="mdl-stat-lbl">ventanas TR (42 pacientes)</div></div>
+        <div class="mdl-stat"><div class="mdl-stat-num">118,278</div><div class="mdl-stat-lbl">train detector (split por archivo)</div></div>
+        <div class="mdl-stat"><div class="mdl-stat-num">50,913</div><div class="mdl-stat-lbl">test detector (sin fuga de datos)</div></div>
+        <div class="mdl-stat"><div class="mdl-stat-num">4</div><div class="mdl-stat-lbl">eventos: wheeze · crackle · stridor · rhonchus</div></div>
+      </div>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Selección de features ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Características</span></div>
+      <h2>De <em>157 a 79</em> features</h2>
+      <p class="about-body">
+        Se extrajeron <strong>157</strong> descriptores espectrales por ventana (MFCC + centroide,
+        entropía, rolloff, flatness…). Luego dos etapas de selección:
+      </p>
+      <div class="mdl-funnel">
+        <div class="mdl-funnel-step"><span class="mdl-funnel-num">157</span><span class="mdl-funnel-lbl">extraídas</span></div>
+        <div class="mdl-funnel-arrow">→</div>
+        <div class="mdl-funnel-step"><span class="mdl-funnel-num">127</span><span class="mdl-funnel-lbl">correlación &gt; 0.85</span></div>
+        <div class="mdl-funnel-arrow">→</div>
+        <div class="mdl-funnel-step mdl-funnel-final"><span class="mdl-funnel-num">79</span><span class="mdl-funnel-lbl">ReliefF</span></div>
+      </div>
+      <p class="about-body">
+        <strong>ReliefF</strong> pondera cada feature por cuán bien separa vecinos de distinta
+        clase (capta relevancia e interacciones, multi-etiqueta). Resultado: <span class="hl">casi
+        el mismo rendimiento con 38% menos features</span> → modelo más rápido y simple de servir.
+        Top: <em>SpectralEntropy, SpectralCentroid, MFCC, SpectralSpread</em>.
+      </p>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Comparativa de modelos (detector) ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Comparativa de modelos</span></div>
+      <h2>Detector de sonidos adventicios</h2>
+      <p class="about-body">
+        Clasificación <strong>multi-etiqueta</strong> (un modelo por evento, estrategia OvR), con
+        <strong>RandomizedSearchCV</strong> + <strong>GroupKFold por archivo</strong> (anti-fuga) y
+        umbral óptimo por etiqueta. Métrica primaria: <strong>Macro ROC-AUC</strong> en test.
+      </p>
+      <div class="mdl-chart">
+        <div class="mdl-bar-row">
+          <span class="mdl-bar-label">Regresión Logística <small>(baseline)</small></span>
+          <div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:72.7%">0.809</div></div>
+        </div>
+        <div class="mdl-bar-row">
+          <span class="mdl-bar-label">Random Forest</span>
+          <div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:86.0%">0.829</div></div>
+        </div>
+        <div class="mdl-bar-row">
+          <span class="mdl-bar-label">XGBoost <small>(127 feats)</small></span>
+          <div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:82.7%">0.824</div></div>
+        </div>
+        <div class="mdl-bar-row">
+          <span class="mdl-bar-label">XGBoost + ReliefF <span class="mdl-tag">PRODUCCIÓN</span></span>
+          <div class="mdl-bar-track"><div class="mdl-bar-fill mdl-win" style="width:76.7%">0.815</div></div>
+        </div>
+        <div class="mdl-axis">Eje Macro ROC-AUC 0.70 – 0.85</div>
+      </div>
+      <p class="about-body">
+        <strong>¿Por qué XGBoost + ReliefF a producción?</strong> Random Forest gana por solo
+        <span class="hl">0.005</span> pero tarda <strong>~2&nbsp;h</strong> en entrenar; XGBoost
+        rinde casi igual, entrena en minutos, detecta mejor el <em>stridor</em> (clase rara) y con
+        ReliefF usa 38% menos features. Mejor equilibrio rendimiento/coste para reentrenar y servir.
+      </p>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Por etiqueta ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Detalle por evento</span></div>
+      <h2>Rendimiento por <em>tipo de sonido</em></h2>
+      <div class="mdl-chart">
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Rhonchus</span><div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:87%">0.874</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Wheeze (sibilancia)</span><div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:63%">0.826</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Stridor (raro · 0.4%)</span><div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:58%">0.816</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Crackle (crepitancia)</span><div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:40.5%">0.781</div></div></div>
+        <div class="mdl-axis">ROC-AUC por etiqueta (XGBoost · eje 0.70 – 0.90)</div>
+      </div>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── COPD ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Severidad COPD0–4</span></div>
+      <h2>Del sonido a la <em>severidad EPOC</em></h2>
+      <p class="about-body">
+        El detector se aplica a cada audio para construir un <strong>perfil acústico</strong>
+        (% de ventanas con cada evento), y de ahí se asigna la severidad COPD0–4. Validación
+        <strong>Leave-One-Patient-Out</strong> sobre 42 pacientes (<em>azar = 0.20</em>).
+      </p>
+      <div class="mdl-chart">
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Estadístico (NearestCentroid)</span><div class="mdl-bar-track"><div class="mdl-bar-fill mdl-win" style="width:85.4%">0.299</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">ML — Reg. Logística</span><div class="mdl-bar-track"><div class="mdl-bar-fill" style="width:84.3%">0.295</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">Baseline directo (sin detector)</span><div class="mdl-bar-track"><div class="mdl-bar-fill mdl-mid" style="width:70.6%">0.247</div></div></div>
+        <div class="mdl-bar-row"><span class="mdl-bar-label">ML — Árbol de decisión</span><div class="mdl-bar-track"><div class="mdl-bar-fill mdl-low" style="width:51.7%">0.181</div></div></div>
+        <div class="mdl-axis">Balanced Accuracy · línea de azar = 0.20</div>
+      </div>
+      <p class="about-body">
+        Honestamente, el clasificador COPD es <strong>débil pero real</strong>: supera al azar
+        (0.30 vs 0.20) y, sobre todo, <span class="hl">mejora el baseline directo</span> (0.30 vs
+        0.247) — la representación del detector <strong>sí aporta señal</strong>. El límite es el
+        tamaño de TR (~40 pacientes). El evento <em>rhonchus</em> es el único estadísticamente
+        significativo (ANOVA p = 0.037).
+      </p>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Monitoreo ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Monitoreo</span></div>
+      <h2>Detección de <em>data drift</em></h2>
+      <p class="about-body">
+        Un monitor (PSI + test KS) compara la distribución de los datos de entrada contra el
+        entrenamiento. Validó el comportamiento esperado:
+      </p>
+      <div class="mdl-drift">
+        <div class="mdl-drift-card mdl-ok">
+          <div class="mdl-drift-h">train vs test</div>
+          <div class="mdl-drift-v">0 / 79</div>
+          <div class="mdl-drift-s">features con drift · ✅ OK</div>
+        </div>
+        <div class="mdl-drift-card mdl-alert">
+          <div class="mdl-drift-h">train vs TR (otra población)</div>
+          <div class="mdl-drift-v">44 / 79</div>
+          <div class="mdl-drift-s">drift significativo · 🚨 ALERTA</div>
+        </div>
+      </div>
+      <p class="about-body">
+        El drift severo en TR <span class="hl">explica empíricamente</span> por qué la severidad
+        COPD es difícil: los audios de TR están distribucionalmente lejos del dominio del detector.
+      </p>
+    </div>
+
+    <div class="about-divider"></div>
+
+    <!-- ── Stack MLOps ── -->
+    <div class="about-section">
+      <div class="about-section-top"><span class="about-section-pill">Infraestructura</span></div>
+      <h2>Pipeline <em>MLOps</em> end-to-end</h2>
+      <div class="mdl-pipe">
+        <span class="mdl-pipe-chip">MLflow · tracking + Model Registry</span>
+        <span class="mdl-pipe-chip">Prefect · pipelines y reentrenamiento</span>
+        <span class="mdl-pipe-chip">FastAPI · API de predicción</span>
+        <span class="mdl-pipe-chip">Docker · contenedor</span>
+        <span class="mdl-pipe-chip">Monitoreo · data drift</span>
+        <span class="mdl-pipe-chip">CI · ruff + black + pytest</span>
+      </div>
+      <p class="about-body" style="margin-top:14px">
+        Cada experimento queda versionado en MLflow; el mejor modelo se promueve a
+        <strong>Production</strong> y la API lo sirve. El reentrenamiento se orquesta con Prefect.
+      </p>
+    </div>
+
+    <div class="about-divider"></div>
+    <div style="text-align:center; margin-top:8px">
+      <button class="btn-primary" onclick="showScreen('upload')">Probar el modelo →</button>
     </div>
 
   </div>

@@ -1059,3 +1059,80 @@
         padding: 32px 16px;
       }
     }
+
+    /* ═══ SCREEN MODELO — resumen técnico ═══ */
+    .mdl-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 4px;
+    }
+    .mdl-stat {
+      background: var(--bg-card); border: 1px solid var(--border-sub);
+      border-radius: var(--radius-sm); padding: 16px 14px; text-align: center;
+    }
+    .mdl-stat-num { font-size: 1.6rem; font-weight: 800; color: var(--primary-light); line-height: 1.1; }
+    .mdl-stat-lbl { font-size: 0.74rem; color: var(--text-dim); margin-top: 6px; }
+
+    .mdl-funnel {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; flex-wrap: wrap; margin: 18px 0;
+    }
+    .mdl-funnel-step {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px 20px; min-width: 110px;
+    }
+    .mdl-funnel-num { font-size: 1.7rem; font-weight: 800; color: var(--white); }
+    .mdl-funnel-lbl { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
+    .mdl-funnel-final { border-color: var(--primary); background: rgba(20,184,166,0.1); }
+    .mdl-funnel-final .mdl-funnel-num { color: var(--primary-light); }
+    .mdl-funnel-arrow { color: var(--primary); font-size: 1.4rem; font-weight: 700; }
+
+    .mdl-chart {
+      background: var(--bg-card); border: 1px solid var(--border-sub);
+      border-radius: var(--radius); padding: 20px 18px; margin: 16px 0;
+    }
+    .mdl-bar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .mdl-bar-label {
+      flex: 0 0 200px; font-size: 0.82rem; color: var(--text); text-align: right;
+    }
+    .mdl-bar-label small { color: var(--text-dim); }
+    .mdl-bar-track {
+      flex: 1; height: 26px; background: var(--bg-surface);
+      border-radius: 6px; overflow: hidden;
+    }
+    .mdl-bar-fill {
+      height: 100%; display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 10px; font-size: 0.78rem; font-weight: 700; color: var(--bg-deep);
+      background: linear-gradient(90deg, var(--primary-dark), var(--primary));
+      border-radius: 6px; min-width: 44px; transition: width 0.6s ease;
+    }
+    .mdl-bar-fill.mdl-win { background: linear-gradient(90deg, #0d9488, var(--green)); }
+    .mdl-bar-fill.mdl-mid { background: linear-gradient(90deg, #b45309, var(--amber)); }
+    .mdl-bar-fill.mdl-low { background: linear-gradient(90deg, #7f1d1d, var(--red)); }
+    .mdl-axis { font-size: 0.72rem; color: var(--text-muted); text-align: right; margin-top: 4px; }
+    .mdl-tag {
+      font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; color: var(--green);
+      background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.35);
+      border-radius: 5px; padding: 2px 7px; margin-left: 6px; vertical-align: middle;
+    }
+
+    .mdl-drift { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+    .mdl-drift-card { border-radius: var(--radius); padding: 18px; text-align: center; }
+    .mdl-drift-card.mdl-ok { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); }
+    .mdl-drift-card.mdl-alert { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35); }
+    .mdl-drift-h { font-size: 0.78rem; color: var(--text-dim); }
+    .mdl-drift-v { font-size: 2rem; font-weight: 800; color: var(--white); margin: 4px 0; }
+    .mdl-ok .mdl-drift-v { color: var(--green); }
+    .mdl-alert .mdl-drift-v { color: var(--red); }
+    .mdl-drift-s { font-size: 0.76rem; color: var(--text-dim); }
+
+    .mdl-pipe { display: flex; flex-wrap: wrap; gap: 10px; }
+    .mdl-pipe-chip {
+      font-size: 0.8rem; color: var(--primary-light); background: rgba(20,184,166,0.1);
+      border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px;
+    }
+
+    @media (max-width: 720px) {
+      .mdl-stats { grid-template-columns: 1fr 1fr; }
+      .mdl-drift { grid-template-columns: 1fr; }
+      .mdl-bar-label { flex-basis: 120px; font-size: 0.74rem; }
+    }
