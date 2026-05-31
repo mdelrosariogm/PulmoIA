@@ -42,6 +42,13 @@ GROUP_COL = "filename"  # agrupación anti-leakage (ventanas del mismo audio)
 COPD_ORDER = {"COPD0": 0, "COPD1": 1, "COPD2": 2, "COPD3": 3, "COPD4": 4}
 RANDOM_STATE = 42
 
+# Features del perfil acústico usadas para clasificar COPD (probabilidades medias;
+# se descarta stridor porque el detector no lo dispara en TR → feature degenerada).
+COPD_PROFILE_FEATS = ["meanp_has_wheeze", "meanp_has_crackle", "meanp_has_rhonchus"]
+
+# Bundle autónomo para servir (sin MLflow en runtime).
+SERVING_BUNDLE = MODELS_DIR / "serving_bundle.pkl"
+
 
 def setup_mlflow(experiment: str = EXPERIMENT_DETECTOR) -> str:
     """Configura el tracking de MLflow (SQLite local) y selecciona el experimento.

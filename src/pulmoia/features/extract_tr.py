@@ -178,6 +178,30 @@ def extract_window_features(frame: np.ndarray, fs: int) -> dict:
             row[f"{k}_coefv_{i+1}"] = cv
     return row
 
+
+def extract_window_rows(signal: np.ndarray, fs: int) -> list[dict]:
+    """Ventanea una señal ya preprocesada y devuelve una fila de features por ventana.
+
+    Reutilizable por el servicio de inferencia (mismo ventaneo que la extracción batch).
+    """
+    win_samples = int(WINDOW_SEC * fs)
+    hop_samples = int(HOP_SEC * fs)
+    if len(signal) < win_samples:
+        starts = [0]
+    else:
+        starts = range(0, len(signal) - win_samples + 1, hop_samples)
+    rows = []
+    for s_idx in starts:
+        frame = signal[s_idx:s_idx + win_samples]
+        if len(frame) < win_samples:
+            frame = np.pad(frame, (0, win_samples - len(frame)))
+        try:
+            rows.append(extract_window_features(frame, fs))
+        except Exception:
+            continue
+    return rows
+
+
 # ─── Pipeline principal ───────────────────────────────────────────────────────
 def parse_patient_id(filename: str) -> str | None:
     m = re.match(r"(H\d+)", filename, re.IGNORECASE)

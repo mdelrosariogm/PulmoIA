@@ -1,0 +1,30 @@
+# Datos y artefactos pesados (no van a la imagen)
+data/
+outputs/
+mlartifacts/
+mlruns/
+mlflow.db
+*.rar
+*.zip
+
+# Modelos: ignorar todo MENOS el bundle servible
+models/
+!models/serving_bundle.pkl
+
+# Entornos y caches
+.venv/
+.prefect/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Repo / docs / notebooks / tests (no necesarios en runtime)
+.git/
+.github/
+docs/
+notebooks/
+tests/
+*.md
+!README.md
