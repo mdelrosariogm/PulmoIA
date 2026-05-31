@@ -61,9 +61,19 @@ OUT_DIR = Path("outputs/baseline")
 
 TARGETS = ["has_wheeze", "has_crackle", "has_stridor", "has_rhonchus"]
 META_COLS = [
-    "filename", "source", "patient_id", "location", "channel", "mode",
-    "equipment", "t_start_s", "t_end_s", "sr_original", "resampled",
-    "diagnosis", "duration_s",
+    "filename",
+    "source",
+    "patient_id",
+    "location",
+    "channel",
+    "mode",
+    "equipment",
+    "t_start_s",
+    "t_end_s",
+    "sr_original",
+    "resampled",
+    "diagnosis",
+    "duration_s",
 ]
 COPD_ORDER = {"COPD0": 0, "COPD1": 1, "COPD2": 2, "COPD3": 3, "COPD4": 4}
 RANDOM_STATE = 42
@@ -106,9 +116,7 @@ def run_detector_baseline() -> dict:
             DummyClassifier(strategy="prior", random_state=RANDOM_STATE)
         ),
         "logreg": MultiOutputClassifier(
-            LogisticRegression(
-                max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE
-            )
+            LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE)
         ),
     }
 
@@ -137,7 +145,13 @@ def run_detector_baseline() -> dict:
         macro_auc = np.nanmean([per_label[t]["roc_auc"] for t in TARGETS])
         macro_f1 = np.mean([per_label[t]["f1"] for t in TARGETS])
         rows.append(
-            {"model": name, "label": "MACRO", "roc_auc": macro_auc, "pr_auc": np.nan, "f1": macro_f1}
+            {
+                "model": name,
+                "label": "MACRO",
+                "roc_auc": macro_auc,
+                "pr_auc": np.nan,
+                "f1": macro_f1,
+            }
         )
         log.info("  %-12s Macro ROC-AUC=%.4f | Macro F1=%.4f", name, macro_auc, macro_f1)
 
@@ -187,15 +201,24 @@ def run_copd_baseline() -> dict:
             mf1 = f1_score(y[te_idx], pred, average="macro", zero_division=0)
             mae = np.mean(np.abs(y[te_idx] - pred))
             rows.append(
-                {"model": name, "fold": fold, "balanced_acc": bacc, "macro_f1": mf1, "mae_ordinal": mae}
+                {
+                    "model": name,
+                    "fold": fold,
+                    "balanced_acc": bacc,
+                    "macro_f1": mf1,
+                    "mae_ordinal": mae,
+                }
             )
             oof_true[name].extend(y[te_idx])
             oof_pred[name].extend(pred)
         sub = pd.DataFrame([r for r in rows if r["model"] == name])
         log.info(
             "  %-20s bAcc=%.3f±%.3f | MacroF1=%.3f | MAE=%.3f",
-            name, sub.balanced_acc.mean(), sub.balanced_acc.std(),
-            sub.macro_f1.mean(), sub.mae_ordinal.mean(),
+            name,
+            sub.balanced_acc.mean(),
+            sub.balanced_acc.std(),
+            sub.macro_f1.mean(),
+            sub.mae_ordinal.mean(),
         )
 
     res = pd.DataFrame(rows)
@@ -206,8 +229,11 @@ def run_copd_baseline() -> dict:
     # Matriz de confusión out-of-fold del logreg
     fig, ax = plt.subplots(figsize=(6, 5))
     ConfusionMatrixDisplay.from_predictions(
-        oof_true["logreg"], oof_pred["logreg"],
-        display_labels=list(COPD_ORDER.keys()), ax=ax, colorbar=False,
+        oof_true["logreg"],
+        oof_pred["logreg"],
+        display_labels=list(COPD_ORDER.keys()),
+        ax=ax,
+        colorbar=False,
     )
     ax.set_title("Baseline COPD (LogReg) — Confusión out-of-fold")
     fig.tight_layout()
@@ -244,7 +270,12 @@ def write_report(det: dict | None, copd: dict | None):
         lines += [
             "## Clasificador COPD0–4 (TR)\n",
             "Validación: StratifiedGroupKFold por patient_id.\n",
-            copd["table"].drop(columns=["fold"]).groupby("model").mean(numeric_only=True).round(4).to_markdown(),
+            copd["table"]
+            .drop(columns=["fold"])
+            .groupby("model")
+            .mean(numeric_only=True)
+            .round(4)
+            .to_markdown(),
             "",
             f"- **Baseline LogReg → Balanced Acc = {copd['copd_logreg_balanced_acc']:.3f}, "
             f"Macro F1 = {copd['copd_logreg_macro_f1']:.3f}, "
@@ -262,7 +293,9 @@ def write_report(det: dict | None, copd: dict | None):
 def main():
     parser = argparse.ArgumentParser(description="Baseline de rendimiento (Fase 1.3)")
     parser.add_argument(
-        "--only", choices=["detector", "copd"], default=None,
+        "--only",
+        choices=["detector", "copd"],
+        default=None,
         help="Ejecutar solo un baseline (por defecto: ambos)",
     )
     args = parser.parse_args()

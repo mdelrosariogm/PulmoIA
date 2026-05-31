@@ -58,8 +58,9 @@ def training_flow(
     registry = None
     if do_register:
         registry = register_task(production, staging)
-    logger.info("Entrenamiento completado. Mejor=%s",
-                max(results, key=results.get) if results else "—")
+    logger.info(
+        "Entrenamiento completado. Mejor=%s", max(results, key=results.get) if results else "—"
+    )
     return {"results": results, "registry": registry}
 
 

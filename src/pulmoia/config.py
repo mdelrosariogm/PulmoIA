@@ -33,9 +33,19 @@ REGISTERED_MODEL_DETECTOR = "pulmoia_detector"
 # ─── Esquema de datos ─────────────────────────────────────────────────────────
 TARGETS = ["has_wheeze", "has_crackle", "has_stridor", "has_rhonchus"]
 META_COLS = [
-    "filename", "source", "patient_id", "location", "channel", "mode",
-    "equipment", "t_start_s", "t_end_s", "sr_original", "resampled",
-    "diagnosis", "duration_s",
+    "filename",
+    "source",
+    "patient_id",
+    "location",
+    "channel",
+    "mode",
+    "equipment",
+    "t_start_s",
+    "t_end_s",
+    "sr_original",
+    "resampled",
+    "diagnosis",
+    "duration_s",
 ]
 GROUP_COL = "filename"  # agrupación anti-leakage (ventanas del mismo audio)
 

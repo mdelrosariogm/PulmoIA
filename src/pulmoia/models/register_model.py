@@ -25,8 +25,9 @@ from mlflow.tracking import MlflowClient
 
 from pulmoia import config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-                    datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+)
 log = logging.getLogger(__name__)
 
 
@@ -75,7 +76,8 @@ def register_and_tag(client: MlflowClient, run, alias: str, stage: str, archive_
         client.set_model_version_tag(name, ver, k, v)
 
     client.update_model_version(
-        name, ver,
+        name,
+        ver,
         description=(
             f"Detector multilabel OvR ({algo}, feature_set={feature_set}, {n_features} feats). "
             f"Macro ROC-AUC test={macro_auc:.4f}, Macro F1={macro_f1:.4f}. "
@@ -84,18 +86,32 @@ def register_and_tag(client: MlflowClient, run, alias: str, stage: str, archive_
     )
     client.set_registered_model_alias(name, alias, ver)
     try:
-        client.transition_model_version_stage(name, ver, stage=stage,
-                                               archive_existing_versions=archive_existing)
-        log.info("  %s v%s [%s/%s] → stage=%s, alias='%s' (Macro AUC=%.4f)",
-                 name, ver, algo, feature_set, stage, alias, macro_auc)
+        client.transition_model_version_stage(
+            name, ver, stage=stage, archive_existing_versions=archive_existing
+        )
+        log.info(
+            "  %s v%s [%s/%s] → stage=%s, alias='%s' (Macro AUC=%.4f)",
+            name,
+            ver,
+            algo,
+            feature_set,
+            stage,
+            alias,
+            macro_auc,
+        )
     except Exception as e:
-        log.warning("  Stage no aplicado (%s); alias '%s' sí. (Macro AUC=%.4f)", e, alias, macro_auc)
+        log.warning(
+            "  Stage no aplicado (%s); alias '%s' sí. (Macro AUC=%.4f)", e, alias, macro_auc
+        )
     return mv
 
 
-def register_best(production: str = "xgboost", staging: str | None = "random_forest",
-                  production_feature_set: str | None = None,
-                  staging_feature_set: str | None = None) -> dict:
+def register_best(
+    production: str = "xgboost",
+    staging: str | None = "random_forest",
+    production_feature_set: str | None = None,
+    staging_feature_set: str | None = None,
+) -> dict:
     """Registra y promueve el detector. Reutilizable por el pipeline de Prefect (Fase 3).
 
     `*_feature_set` permite distinguir variantes (p. ej. 'relieff' vs 'all') del mismo algoritmo.
@@ -118,8 +134,9 @@ def register_best(production: str = "xgboost", staging: str | None = "random_for
     log.info("Registrando versiones en '%s':", config.REGISTERED_MODEL_DETECTOR)
     out = {}
     prod_run = best_run_for_algo(client, exp.experiment_id, production, production_feature_set)
-    mv_p = register_and_tag(client, prod_run, alias="champion", stage="Production",
-                            archive_existing=True)
+    mv_p = register_and_tag(
+        client, prod_run, alias="champion", stage="Production", archive_existing=True
+    )
     out["production"] = (production, mv_p.version)
 
     if staging and (staging, staging_feature_set) != (production, production_feature_set):
@@ -127,24 +144,34 @@ def register_best(production: str = "xgboost", staging: str | None = "random_for
         mv_s = register_and_tag(client, stg_run, alias="challenger", stage="Staging")
         out["staging"] = (staging, mv_s.version)
 
-    log.info("Registry actualizado. UI: uv run mlflow ui --backend-store-uri %s",
-             config.MLFLOW_TRACKING_URI)
+    log.info(
+        "Registry actualizado. UI: uv run mlflow ui --backend-store-uri %s",
+        config.MLFLOW_TRACKING_URI,
+    )
     return out
 
 
 def main():
     parser = argparse.ArgumentParser(description="Registrar y promover detectores")
-    parser.add_argument("--production", default="xgboost",
-                        choices=["xgboost", "random_forest", "logreg"])
-    parser.add_argument("--staging", default="random_forest",
-                        choices=["xgboost", "random_forest", "logreg"])
-    parser.add_argument("--production-feature-set", default=None,
-                        help="filtra el run de producción por feature_set (p. ej. 'relieff')")
+    parser.add_argument(
+        "--production", default="xgboost", choices=["xgboost", "random_forest", "logreg"]
+    )
+    parser.add_argument(
+        "--staging", default="random_forest", choices=["xgboost", "random_forest", "logreg"]
+    )
+    parser.add_argument(
+        "--production-feature-set",
+        default=None,
+        help="filtra el run de producción por feature_set (p. ej. 'relieff')",
+    )
     parser.add_argument("--staging-feature-set", default=None)
     args = parser.parse_args()
-    register_best(production=args.production, staging=args.staging,
-                  production_feature_set=args.production_feature_set,
-                  staging_feature_set=args.staging_feature_set)
+    register_best(
+        production=args.production,
+        staging=args.staging,
+        production_feature_set=args.production_feature_set,
+        staging_feature_set=args.staging_feature_set,
+    )
 
 
 if __name__ == "__main__":

@@ -26,8 +26,9 @@ import pandas as pd
 
 from pulmoia import config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-                    datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+)
 log = logging.getLogger(__name__)
 
 TR_WINDOWS = config.OUTPUTS_DIR / "features_TR_windows.csv"
@@ -38,8 +39,11 @@ CHAMPION_URI = f"models:/{config.REGISTERED_MODEL_DETECTOR}@champion"
 
 
 def load_selected_127() -> list[str]:
-    return [ln.strip() for ln in SELECTED_127.read_text(encoding="utf-8").splitlines()
-            if ln.strip() and not ln.startswith("#")]
+    return [
+        ln.strip()
+        for ln in SELECTED_127.read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.startswith("#")
+    ]
 
 
 def preprocess(df: pd.DataFrame, feats127: list[str]):
@@ -57,8 +61,12 @@ def build_profiles():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     log.info("Cargando ventanas TR: %s", TR_WINDOWS)
     df = pd.read_csv(TR_WINDOWS, low_memory=False)
-    log.info("Ventanas=%d | audios=%d | pacientes=%d",
-             len(df), df["filename"].nunique(), df["patient_id"].nunique())
+    log.info(
+        "Ventanas=%d | audios=%d | pacientes=%d",
+        len(df),
+        df["filename"].nunique(),
+        df["patient_id"].nunique(),
+    )
 
     feats127 = load_selected_127()
     Xs = preprocess(df, feats127)
@@ -67,8 +75,8 @@ def build_profiles():
     log.info("Cargando detector champion: %s", CHAMPION_URI)
     detector = mlflow.sklearn.load_model(CHAMPION_URI)
 
-    proba = detector.predict_proba(Xs)      # DataFrame (n, 4 labels)
-    pred = detector.predict(Xs)             # binario por umbral de etiqueta
+    proba = detector.predict_proba(Xs)  # DataFrame (n, 4 labels)
+    pred = detector.predict(Xs)  # binario por umbral de etiqueta
     labels = list(proba.columns)
 
     base = df[["filename", "patient_id", "channel", "diagnosis"]].copy()
@@ -94,8 +102,7 @@ def build_profiles():
     patient["n_ventanas"] = base.groupby(["patient_id", "diagnosis"]).size().to_numpy()
     patient.to_csv(OUT_DIR / "profiles_patient.csv", index=False)
 
-    log.info("Perfiles guardados en %s (audio=%d, paciente=%d)",
-             OUT_DIR, len(audio), len(patient))
+    log.info("Perfiles guardados en %s (audio=%d, paciente=%d)", OUT_DIR, len(audio), len(patient))
     log.info("Perfil por paciente (medias por clase COPD):")
     cols = [f"pct_{lab}" for lab in labels]
     summary = patient.groupby("diagnosis")[cols].mean().round(3)

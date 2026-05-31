@@ -33,7 +33,11 @@ def full_pipeline(
     logger = get_run_logger()
     report = preprocessing_flow(regenerate=regenerate)
     result = training_flow(
-        algos=algos, n_iter=n_iter, cv=cv, sample=sample, do_register=do_register,
+        algos=algos,
+        n_iter=n_iter,
+        cv=cv,
+        sample=sample,
+        do_register=do_register,
     )
     logger.info("Pipeline pulmoia finalizado.")
     return {"validation": report, "training": result}
@@ -41,10 +45,14 @@ def full_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(description="Flow principal pulmoia (Fase 3)")
-    parser.add_argument("--regenerate", action="store_true",
-                        help="regenerar datos preparados antes de entrenar")
-    parser.add_argument("--smoke", action="store_true",
-                        help="validación rápida (xgboost, búsqueda mínima, sin registro)")
+    parser.add_argument(
+        "--regenerate", action="store_true", help="regenerar datos preparados antes de entrenar"
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="validación rápida (xgboost, búsqueda mínima, sin registro)",
+    )
     args = parser.parse_args()
 
     if args.smoke:

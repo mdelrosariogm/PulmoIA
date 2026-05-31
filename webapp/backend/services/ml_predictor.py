@@ -11,21 +11,46 @@ from pulmoia.serving.inference import load_bundle, predict_from_audio_bytes
 
 # Metadatos clínicos por nivel COPD (texto mostrado en la UI).
 COPD_META = {
-    0: {"name": "Bajo Riesgo", "fev1_fvc": "Normal (≥ 70%)", "fev1_pct": "Normal (≥ 80%)",
+    0: {
+        "name": "Bajo Riesgo",
+        "fev1_fvc": "Normal (≥ 70%)",
+        "fev1_pct": "Normal (≥ 80%)",
         "pattern": "PFT normal",
-        "recommendation": "Seguimiento normal — controles anuales recomendados", "emergency": False},
-    1: {"name": "Nivel Leve", "fev1_fvc": "< 70%", "fev1_pct": "≥ 80%",
+        "recommendation": "Seguimiento normal — controles anuales recomendados",
+        "emergency": False,
+    },
+    1: {
+        "name": "Nivel Leve",
+        "fev1_fvc": "< 70%",
+        "fev1_pct": "≥ 80%",
         "pattern": "Obstrucción leve",
-        "recommendation": "Observación recomendada — consulta médica en 3 meses", "emergency": False},
-    2: {"name": "Nivel Moderado", "fev1_fvc": "< 70%", "fev1_pct": "50–80%",
+        "recommendation": "Observación recomendada — consulta médica en 3 meses",
+        "emergency": False,
+    },
+    2: {
+        "name": "Nivel Moderado",
+        "fev1_fvc": "< 70%",
+        "fev1_pct": "50–80%",
         "pattern": "Obstrucción moderada",
-        "recommendation": "Acudir al médico esta semana", "emergency": False},
-    3: {"name": "Nivel Grave", "fev1_fvc": "< 70%", "fev1_pct": "30–50%",
+        "recommendation": "Acudir al médico esta semana",
+        "emergency": False,
+    },
+    3: {
+        "name": "Nivel Grave",
+        "fev1_fvc": "< 70%",
+        "fev1_pct": "30–50%",
         "pattern": "Obstrucción grave",
-        "recommendation": "Consulta médica urgente — 24 a 48 horas", "emergency": False},
-    4: {"name": "Nivel Muy Grave", "fev1_fvc": "< 70%", "fev1_pct": "< 30% (o < 50% con I.R.)",
+        "recommendation": "Consulta médica urgente — 24 a 48 horas",
+        "emergency": False,
+    },
+    4: {
+        "name": "Nivel Muy Grave",
+        "fev1_fvc": "< 70%",
+        "fev1_pct": "< 30% (o < 50% con I.R.)",
         "pattern": "Insuficiencia respiratoria crónica",
-        "recommendation": "Atención de emergencia inmediata — llame al 123", "emergency": True},
+        "recommendation": "Atención de emergencia inmediata — llame al 123",
+        "emergency": True,
+    },
 }
 
 

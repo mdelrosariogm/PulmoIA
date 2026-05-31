@@ -264,10 +264,13 @@ Por cada ventana de 1 segundo se extraen los siguientes descriptores, cada uno r
 |---|---|---|---|---|
 | HF_Lung_V1 (steth_) | 4,504 | **130,616** | 169 | Paso 1: detector acústico |
 | ICBHI 2017 | 920 | **~37,800** | 169 | Paso 1: refuerzo detector |
-| RespiratoryDatabase@TR | ~500 | **~15,000** | 169 | Paso 2: clasificador COPD |
-| **Total** | **~5,924** | **~183,000** | | |
+| RespiratoryDatabase@TR | 504 | **21,158** | 168 | Paso 2: clasificador COPD |
+| **Total** | **~5,924** | **~189,000** | | |
 
-> Ventana: 1s duración, 50% solapamiento (hop=0.5s). Valores de ICBHI y TR se actualizarán al finalizar extracción.
+> Ventana: 1s duración, 50% solapamiento (hop=0.5s).
+> **Nota:** `outputs/features_TR.csv` es un agregado **por archivo-canal** (504 filas) de una
+> corrida previa; la extracción **por ventana** (`features_TR_windows.csv`, 21,158 filas) se
+> usa en los Pasos 2–3. Ver `docs/05_copd_pipeline.md`.
 
 **Distribución de etiquetas acústicas — HF_Lung_V1 (130,616 ventanas):**
 
@@ -454,20 +457,49 @@ COPD4: wheeze=X'', crackle=Y'', ...
 
 ---
 
-## 🗺️ Roadmap del Proyecto
+## 🗺️ Roadmap del Proyecto (MLOps end-to-end — COMPLETO)
 
-- [x] Extracción de features espectrales — RespiratoryDatabase@TR (por ventana)
-- [x] Extracción de features espectrales — HF_Lung_V1 steth_ (por ventana, multilabel)
-- [x] Extracción de features espectrales — ICBHI 2017 (por ventana, multilabel)
-- [x] Verificación de etiquetado por solapamiento temporal
-- [x] EDA y estadística descriptiva — 3 bases de datos (sweetviz)
-- [ ] Análisis y selección de features (varianza, correlación, MI, RF, XGBoost, SHAP)
-- [ ] Estandarización (StandardScaler) y guardado del scaler
-- [ ] Paso 1: Entrenamiento detector multilabel (HF + ICBHI) — split por audio
-- [ ] Paso 2: Inferencia del detector sobre TR → perfiles acústicos por audio
-- [ ] Paso 3: Análisis estadístico de perfiles acústicos por nivel COPD (ANOVA + umbrales)
-- [ ] Evaluación con validación cruzada por paciente
-- [ ] Reporte final y visualizaciones clínicas
+- [x] Extracción de features espectrales — TR / HF_Lung_V1 / ICBHI 2017
+- [x] EDA y estadística descriptiva (sweetviz)
+- [x] Selección de features — correlación + **ReliefF** (127→79)
+- [x] Estandarización (StandardScaler) y guardado del scaler
+- [x] **Fase 2** — Experiment tracking (MLflow): detector RF/XGBoost/LogReg + Model Registry
+- [x] **Fase 3** — Pipelines (Prefect): preprocesamiento, entrenamiento, scheduling
+- [x] **Paso 2** — Inferencia del detector sobre TR → perfil acústico
+- [x] **Paso 3** — Asignación COPD0–4 (ANOVA + estadístico/ML, CV por paciente)
+- [x] **Fase 4** — Deployment: API FastAPI + Dockerfile
+- [x] **Web app funcional** — UI (mockup) + modelo real (`webapp/`)
+- [x] **Fase 5** — Monitoreo: demo de data drift (PSI/KS) + diseño
+- [x] **Fase 6** — Testing (pytest), calidad (ruff + black), CI (GitHub Actions), docs
+
+---
+
+## 📚 Documentación
+
+| Doc | Contenido |
+|---|---|
+| [docs/01_planificacion.md](docs/01_planificacion.md) | Problema, métricas, alcance MVP, timeline, decisiones |
+| [docs/02_experimentos.md](docs/02_experimentos.md) | MLflow: experimentos del detector + Model Registry |
+| [docs/03_pipelines.md](docs/03_pipelines.md) | Prefect: flows de datos y entrenamiento |
+| [docs/04_seleccion_features.md](docs/04_seleccion_features.md) | Selección de features con ReliefF |
+| [docs/05_copd_pipeline.md](docs/05_copd_pipeline.md) | Pasos 2–3: perfil acústico + clasificación COPD |
+| [docs/06_deployment.md](docs/06_deployment.md) | API FastAPI + Docker |
+| [docs/07_webapp.md](docs/07_webapp.md) | Web app funcional (UI + modelo real) |
+| [docs/08_monitoring.md](docs/08_monitoring.md) | Monitoreo: data drift + diseño |
+| [docs/HANDOFF.md](docs/HANDOFF.md) · [docs/PROMPT_CONTINUACION.md](docs/PROMPT_CONTINUACION.md) | Traspaso a otro equipo |
+
+### ⚡ Quickstart
+
+```bash
+uv sync --extra mlops --extra api          # entorno (Python 3.11)
+uv run pytest                              # tests
+# Web app (UI + modelo real) → http://localhost:8080
+uv run python -m pulmoia.serving.bundle
+uv run uvicorn main:app --app-dir webapp/backend --port 8080
+```
+
+> **Calidad:** `uv run ruff check src tests webapp/backend` · `uv run black --check .` ·
+> CI en `.github/workflows/ci.yml`. **Nota:** datos/modelos no versionados (ver `docs/HANDOFF.md`).
 
 ---
 

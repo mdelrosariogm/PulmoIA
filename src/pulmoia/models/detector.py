@@ -54,6 +54,9 @@ class MultiLabelDetector:
         """Predicción binaria por etiqueta aplicando el umbral de cada una."""
         proba = self.predict_proba(X)
         return pd.DataFrame(
-            {lab: (proba[lab].to_numpy() >= self.thresholds[lab]).astype(int) for lab in self.labels},
+            {
+                lab: (proba[lab].to_numpy() >= self.thresholds[lab]).astype(int)
+                for lab in self.labels
+            },
             columns=self.labels,
         )

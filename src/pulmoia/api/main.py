@@ -75,7 +75,9 @@ async def predict(files: list[UploadFile] = File(..., description="Uno o varios 
             if os.path.getsize(dest) == 0:
                 raise HTTPException(status_code=400, detail=f"Archivo vacío: '{f.filename}'.")
             if os.path.getsize(dest) > MAX_BYTES:
-                raise HTTPException(status_code=413, detail=f"Archivo demasiado grande: '{f.filename}'.")
+                raise HTTPException(
+                    status_code=413, detail=f"Archivo demasiado grande: '{f.filename}'."
+                )
             paths.append(dest)
 
         try:

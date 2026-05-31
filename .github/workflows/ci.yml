@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync dependencies (core + api + dev)
+        run: uv sync --extra api
+
+      - name: Lint (ruff)
+        run: uv run ruff check src tests webapp/backend
+
+      - name: Format check (black)
+        run: uv run black --check src tests webapp/backend
+
+      - name: Tests (pytest)
+        # Los tests que requieren datos/bundle se omiten automáticamente (skipif).
+        run: uv run pytest -q

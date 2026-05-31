@@ -36,8 +36,11 @@ def validate_features_frame(df: pd.DataFrame, name: str, expect_targets: bool = 
     warnings: list[str] = []
 
     # Columna de grupo (anti-leakage)
-    _require(config.GROUP_COL in df.columns,
-             f"[{name}] falta la columna de grupo '{config.GROUP_COL}'", errors)
+    _require(
+        config.GROUP_COL in df.columns,
+        f"[{name}] falta la columna de grupo '{config.GROUP_COL}'",
+        errors,
+    )
 
     # Features numéricos
     feats = config.feature_columns(df)
@@ -72,11 +75,21 @@ def validate_features_frame(df: pd.DataFrame, name: str, expect_targets: bool = 
     for w in warnings:
         log.warning(w)
 
-    report = {"name": name, "n_rows": len(df), "n_features": len(feats),
-              "n_groups": int(df[config.GROUP_COL].nunique()) if config.GROUP_COL in df else 0,
-              "prevalence": prevalence, "warnings": warnings}
-    log.info("[%s] OK: %d filas, %d features, %d grupos",
-             name, report["n_rows"], report["n_features"], report["n_groups"])
+    report = {
+        "name": name,
+        "n_rows": len(df),
+        "n_features": len(feats),
+        "n_groups": int(df[config.GROUP_COL].nunique()) if config.GROUP_COL in df else 0,
+        "prevalence": prevalence,
+        "warnings": warnings,
+    }
+    log.info(
+        "[%s] OK: %d filas, %d features, %d grupos",
+        name,
+        report["n_rows"],
+        report["n_features"],
+        report["n_groups"],
+    )
     return report
 
 
@@ -90,8 +103,11 @@ def assert_no_group_leakage(train: pd.DataFrame, test: pd.DataFrame) -> int:
         raise DataValidationError(
             f"¡Fuga de datos! {len(overlap)} grupos en train y test: {list(overlap)[:5]}..."
         )
-    log.info("Sin fuga de grupos: train=%d / test=%d grupos disjuntos",
-             train[g].nunique(), test[g].nunique())
+    log.info(
+        "Sin fuga de grupos: train=%d / test=%d grupos disjuntos",
+        train[g].nunique(),
+        test[g].nunique(),
+    )
     return len(overlap)
 
 

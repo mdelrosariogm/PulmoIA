@@ -15,8 +15,16 @@ router = APIRouter(tags=["Análisis Pulmonar"])
 ml_predictor = MLPredictor()
 
 ALLOWED_AUDIO_TYPES = {
-    "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave",
-    "audio/mpeg", "audio/mp3", "audio/aac", "audio/flac", "audio/ogg", "audio/m4a",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
+    "audio/vnd.wave",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/aac",
+    "audio/flac",
+    "audio/ogg",
+    "audio/m4a",
     "application/octet-stream",  # fallback genérico de algunos navegadores
 }
 MAX_BYTES = 50 * 1024 * 1024
@@ -25,11 +33,14 @@ MAX_BYTES = 50 * 1024 * 1024
 @router.post(
     "/analyze",
     response_model=AnalysisResult,
-    responses={400: {"model": ErrorResponse}, 422: {"model": ErrorResponse},
-               500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
     summary="Analizar audio de auscultación",
     description="Recibe un audio de auscultación pulmonar y retorna el triage COPD (0–4) "
-                "con confianza, perfil acústico y recomendación clínica.",
+    "con confianza, perfil acústico y recomendación clínica.",
 )
 async def analyze_audio(
     background_tasks: BackgroundTasks,
@@ -40,10 +51,13 @@ async def analyze_audio(
     symptoms: str | None = Form(""),
 ):
     # Validación de formato (acepta también por extensión .wav si el navegador no envía content-type)
-    ext_ok = (audio.filename or "").lower().endswith((".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a"))
+    ext_ok = (
+        (audio.filename or "").lower().endswith((".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a"))
+    )
     if audio.content_type not in ALLOWED_AUDIO_TYPES and not ext_ok:
-        raise HTTPException(status_code=400,
-                            detail=f"Formato no soportado: {audio.content_type or audio.filename}.")
+        raise HTTPException(
+            status_code=400, detail=f"Formato no soportado: {audio.content_type or audio.filename}."
+        )
 
     audio_bytes = await audio.read()
     if not audio_bytes:
@@ -60,13 +74,19 @@ async def analyze_audio(
         raise HTTPException(status_code=500, detail=f"Error durante el análisis: {exc}") from exc
 
     background_tasks.add_task(
-        _log_analysis, analysis_id=analysis_id, role=role,
-        patient_age=patient_age, copd_level=int(result.copd_level), confidence=result.confidence,
+        _log_analysis,
+        analysis_id=analysis_id,
+        role=role,
+        patient_age=patient_age,
+        copd_level=int(result.copd_level),
+        confidence=result.confidence,
     )
     return result
 
 
 async def _log_analysis(**kwargs):
     """Log de auditoría (placeholder; conectar a BD en producción)."""
-    print(f"[LOG] Análisis {kwargs.get('analysis_id')} · COPD{kwargs.get('copd_level')} "
-          f"· conf={kwargs.get('confidence', 0):.2%}")
+    print(
+        f"[LOG] Análisis {kwargs.get('analysis_id')} · COPD{kwargs.get('copd_level')} "
+        f"· conf={kwargs.get('confidence', 0):.2%}"
+    )

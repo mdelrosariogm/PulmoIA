@@ -31,8 +31,9 @@ from skrebate import ReliefF
 
 from pulmoia import config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-                    datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+)
 log = logging.getLogger(__name__)
 
 OUT_DIR = config.OUTPUTS_DIR / "feature_selection" / "relieff"
@@ -110,47 +111,73 @@ def save_artifacts(W: pd.DataFrame, selected: list[str]):
 def run_selection(n_neighbors=100, coverage=0.90) -> list[str]:
     train = pd.read_csv(config.DETECTOR_DATA_DIR / "train_scaled.csv", low_memory=False)
     feats = config.feature_columns(train)
-    log.info("Calculando ReliefF sobre %d features, %d etiquetas...", len(feats), len(config.TARGETS))
+    log.info(
+        "Calculando ReliefF sobre %d features, %d etiquetas...", len(feats), len(config.TARGETS)
+    )
     W = compute_relieff_weights(train, feats, n_neighbors=n_neighbors)
     selected = select_by_coverage(W, coverage=coverage)
     save_artifacts(W, selected)
-    log.info("Seleccionadas %d/%d features (cobertura %.0f%%). Top-5: %s",
-             len(selected), len(feats), coverage * 100, selected[:5])
+    log.info(
+        "Seleccionadas %d/%d features (cobertura %.0f%%). Top-5: %s",
+        len(selected),
+        len(feats),
+        coverage * 100,
+        selected[:5],
+    )
     return selected
 
 
 def main():
     parser = argparse.ArgumentParser(description="Selección de features por ReliefF (detector)")
     parser.add_argument("--neighbors", type=int, default=100)
-    parser.add_argument("--coverage", type=float, default=0.90,
-                        help="fracción del peso agregado a cubrir (0-1)")
-    parser.add_argument("--no-retrain", action="store_true",
-                        help="solo generar el ranking, sin reentrenar")
-    parser.add_argument("--from-saved", action="store_true",
-                        help="reutilizar selected_features.txt (no recalcular ReliefF)")
+    parser.add_argument(
+        "--coverage", type=float, default=0.90, help="fracción del peso agregado a cubrir (0-1)"
+    )
+    parser.add_argument(
+        "--no-retrain", action="store_true", help="solo generar el ranking, sin reentrenar"
+    )
+    parser.add_argument(
+        "--from-saved",
+        action="store_true",
+        help="reutilizar selected_features.txt (no recalcular ReliefF)",
+    )
     args = parser.parse_args()
 
     if args.from_saved and SELECTED_PATH.exists():
-        selected = [ln.strip() for ln in SELECTED_PATH.read_text(encoding="utf-8").splitlines()
-                    if ln.strip() and not ln.startswith("#")]
+        selected = [
+            ln.strip()
+            for ln in SELECTED_PATH.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.startswith("#")
+        ]
         log.info("Reutilizando %d features de %s", len(selected), SELECTED_PATH.name)
     else:
         selected = run_selection(n_neighbors=args.neighbors, coverage=args.coverage)
 
     if not args.no_retrain:
         from pulmoia.models.train_detector import run_training
+
         log.info("=" * 60)
         log.info("Reentrenando detector con %d features ReliefF...", len(selected))
         results = run_training(
-            ["xgboost", "logreg"], n_iter=15, cv=3, sample=15000,
-            feature_subset=selected, feature_set="relieff",
+            ["xgboost", "logreg"],
+            n_iter=15,
+            cv=3,
+            sample=15000,
+            feature_subset=selected,
+            feature_set="relieff",
         )
         log.info("=" * 60)
         log.info("Comparativa (Macro ROC-AUC):")
-        log.info("  XGBoost  ReliefF(%d feats) = %.4f   | all(127) = 0.8240",
-                 len(selected), results.get("xgboost", float("nan")))
-        log.info("  LogReg   ReliefF(%d feats) = %.4f   | all(127) = 0.8093",
-                 len(selected), results.get("logreg", float("nan")))
+        log.info(
+            "  XGBoost  ReliefF(%d feats) = %.4f   | all(127) = 0.8240",
+            len(selected),
+            results.get("xgboost", float("nan")),
+        )
+        log.info(
+            "  LogReg   ReliefF(%d feats) = %.4f   | all(127) = 0.8093",
+            len(selected),
+            results.get("logreg", float("nan")),
+        )
 
 
 if __name__ == "__main__":

@@ -76,8 +76,10 @@ def _predict_from_features(feats: pd.DataFrame, n_audios: int) -> dict:
     labels = bundle["detector_labels"]
 
     perfil = {
-        lab: {"pct_ventanas": round(float(pred[lab].mean()), 4),
-              "prob_media": round(float(proba[lab].mean()), 4)}
+        lab: {
+            "pct_ventanas": round(float(pred[lab].mean()), 4),
+            "prob_media": round(float(proba[lab].mean()), 4),
+        }
         for lab in labels
     }
     meanp = {f"meanp_{lab}": float(proba[lab].mean()) for lab in labels}
@@ -105,7 +107,11 @@ def _predict_from_features(feats: pd.DataFrame, n_audios: int) -> dict:
 def predict_from_wavs(paths) -> dict:
     """Cadena completa sobre uno o varios wav (se agregan todas sus ventanas)."""
     frames = [features_from_wav(p) for p in paths]
-    feats = pd.concat([f for f in frames if not f.empty], ignore_index=True) if frames else pd.DataFrame()
+    feats = (
+        pd.concat([f for f in frames if not f.empty], ignore_index=True)
+        if frames
+        else pd.DataFrame()
+    )
     return _predict_from_features(feats, len(paths))
 
 

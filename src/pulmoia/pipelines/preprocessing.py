@@ -46,8 +46,11 @@ def load_prepared(data_dir=None) -> tuple[pd.DataFrame, pd.DataFrame]:
 def validate(train: pd.DataFrame, test: pd.DataFrame) -> dict:
     logger = get_run_logger()
     report = validate_prepared_detector_data(train, test)
-    logger.info("Validación OK | train=%d test=%d filas",
-                report["train"]["n_rows"], report["test"]["n_rows"])
+    logger.info(
+        "Validación OK | train=%d test=%d filas",
+        report["train"]["n_rows"],
+        report["test"]["n_rows"],
+    )
     return report
 
 

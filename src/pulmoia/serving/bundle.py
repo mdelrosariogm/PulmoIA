@@ -26,8 +26,9 @@ from sklearn.preprocessing import StandardScaler
 
 from pulmoia import config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-                    datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+)
 log = logging.getLogger(__name__)
 
 SELECTED_127 = config.CLEANING_DIR / "HF_ICBHI" / "selected_features.txt"
@@ -37,8 +38,11 @@ CHAMPION_URI = f"models:/{config.REGISTERED_MODEL_DETECTOR}@champion"
 
 
 def build_bundle() -> dict:
-    feats127 = [ln.strip() for ln in SELECTED_127.read_text(encoding="utf-8").splitlines()
-                if ln.strip() and not ln.startswith("#")]
+    feats127 = [
+        ln.strip()
+        for ln in SELECTED_127.read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.startswith("#")
+    ]
     scaler = pickle.load(open(SCALER, "rb"))
 
     config.setup_mlflow(config.EXPERIMENT_DETECTOR)
@@ -52,8 +56,9 @@ def build_bundle() -> dict:
     # LogReg multinomial: da predict_proba → confianza real para la web.
     copd_model = make_pipeline(
         StandardScaler(),
-        LogisticRegression(max_iter=2000, class_weight="balanced",
-                           random_state=config.RANDOM_STATE),
+        LogisticRegression(
+            max_iter=2000, class_weight="balanced", random_state=config.RANDOM_STATE
+        ),
     )
     copd_model.fit(X, y)
     log.info("Modelo COPD (LogReg multinomial) entrenado con %d pacientes", len(df))

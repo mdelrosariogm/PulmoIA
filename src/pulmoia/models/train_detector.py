@@ -69,8 +69,11 @@ def make_estimator_and_space(algo: str, scale_pos_weight: float):
         }
     elif algo == "xgboost":
         est = XGBClassifier(
-            tree_method="hist", eval_metric="logloss", n_jobs=-1,
-            random_state=rs, scale_pos_weight=scale_pos_weight,
+            tree_method="hist",
+            eval_metric="logloss",
+            n_jobs=-1,
+            random_state=rs,
+            scale_pos_weight=scale_pos_weight,
         )
         space = {
             "n_estimators": randint(200, 600),
@@ -95,8 +98,9 @@ def best_threshold(y_true, proba) -> float:
     return float(thr[np.argmax(f1[:-1])])
 
 
-def train_one_label(algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_search, g_search,
-                    n_iter, n_splits):
+def train_one_label(
+    algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_search, g_search, n_iter, n_splits
+):
     """Tunea, selecciona umbral, refit en train completo y evalúa en test. Loguea en MLflow."""
     pos = int(y_search.sum())
     neg = int(len(y_search) - pos)
@@ -105,16 +109,28 @@ def train_one_label(algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_sea
 
     cv = GroupKFold(n_splits=n_splits)
     search = RandomizedSearchCV(
-        est, space, n_iter=n_iter, scoring="roc_auc", cv=cv,
-        n_jobs=-1, random_state=config.RANDOM_STATE, refit=True, error_score="raise",
+        est,
+        space,
+        n_iter=n_iter,
+        scoring="roc_auc",
+        cv=cv,
+        n_jobs=-1,
+        random_state=config.RANDOM_STATE,
+        refit=True,
+        error_score="raise",
     )
     search.fit(X_search, y_search, groups=g_search)
     cv_auc = float(search.best_score_)
 
     # Umbral por F1 sobre predicciones out-of-fold (sin leakage de test)
     oof = cross_val_predict(
-        search.best_estimator_, X_search, y_search, cv=cv, groups=g_search,
-        method="predict_proba", n_jobs=-1,
+        search.best_estimator_,
+        X_search,
+        y_search,
+        cv=cv,
+        groups=g_search,
+        method="predict_proba",
+        n_jobs=-1,
     )[:, 1]
     thr = best_threshold(y_search, oof)
 
@@ -133,20 +149,35 @@ def train_one_label(algo, label, X_tr, y_tr, groups, X_te, y_te, X_search, y_sea
         mlflow.set_tags({"algo": algo, "label": label, "stage": "experiment"})
         mlflow.log_params({f"hp_{k}": v for k, v in search.best_params_.items()})
         mlflow.log_param("scale_pos_weight", round(spw, 3))
-        mlflow.log_metrics({
+        mlflow.log_metrics(
+            {
+                "cv_roc_auc": cv_auc,
+                "test_roc_auc": test_auc,
+                "test_pr_auc": test_ap,
+                "test_f1": test_f1,
+                "threshold": thr,
+                "pos_rate_test": float(y_te.mean()),
+            }
+        )
+    log.info(
+        "  [%s] %-13s cv_auc=%.4f test_auc=%.4f test_f1=%.3f thr=%.2f",
+        algo,
+        label,
+        cv_auc,
+        test_auc,
+        test_f1,
+        thr,
+    )
+    return (
+        final_est,
+        thr,
+        {
             "cv_roc_auc": cv_auc,
             "test_roc_auc": test_auc,
             "test_pr_auc": test_ap,
             "test_f1": test_f1,
-            "threshold": thr,
-            "pos_rate_test": float(y_te.mean()),
-        })
-    log.info(
-        "  [%s] %-13s cv_auc=%.4f test_auc=%.4f test_f1=%.3f thr=%.2f",
-        algo, label, cv_auc, test_auc, test_f1, thr,
+        },
     )
-    return final_est, thr, {"cv_roc_auc": cv_auc, "test_roc_auc": test_auc,
-                            "test_pr_auc": test_ap, "test_f1": test_f1}
 
 
 def train_algo(algo, data, n_iter, n_splits, run_type="full", feature_set="all"):
@@ -160,14 +191,38 @@ def train_algo(algo, data, n_iter, n_splits, run_type="full", feature_set="all")
 
     estimators, thresholds, per_label = {}, {}, {}
     with mlflow.start_run(run_name=f"{algo}_{feature_set}") as parent:
-        mlflow.set_tags({"algo": algo, "strategy": "OvR", "stage": "experiment",
-                         "run_type": run_type, "feature_set": feature_set})
-        mlflow.log_params({"n_iter": n_iter, "cv_splits": n_splits, "n_features": len(feats),
-                           "n_train": len(X_tr), "n_search": len(X_s)})
+        mlflow.set_tags(
+            {
+                "algo": algo,
+                "strategy": "OvR",
+                "stage": "experiment",
+                "run_type": run_type,
+                "feature_set": feature_set,
+            }
+        )
+        mlflow.log_params(
+            {
+                "n_iter": n_iter,
+                "cv_splits": n_splits,
+                "n_features": len(feats),
+                "n_train": len(X_tr),
+                "n_search": len(X_s),
+            }
+        )
         for label in config.TARGETS:
             est, thr, m = train_one_label(
-                algo, label, X_tr, y_tr_df[label], groups, X_te, y_te_df[label],
-                X_s, y_s_df[label], g_s, n_iter, n_splits,
+                algo,
+                label,
+                X_tr,
+                y_tr_df[label],
+                groups,
+                X_te,
+                y_te_df[label],
+                X_s,
+                y_s_df[label],
+                g_s,
+                n_iter,
+                n_splits,
             )
             estimators[label], thresholds[label], per_label[label] = est, thr, m
 
@@ -176,17 +231,27 @@ def train_algo(algo, data, n_iter, n_splits, run_type="full", feature_set="all")
         mlflow.log_metrics({"macro_test_roc_auc": macro_auc, "macro_test_f1": macro_f1})
 
         detector = MultiLabelDetector(
-            estimators=estimators, feature_names=feats,
-            labels=config.TARGETS, thresholds=thresholds,
+            estimators=estimators,
+            feature_names=feats,
+            labels=config.TARGETS,
+            thresholds=thresholds,
         )
         example = pd.DataFrame(X_te[:5], columns=feats)
         signature = infer_signature(example, detector.predict(example))
         mlflow.sklearn.log_model(
-            detector, artifact_path="model", signature=signature, input_example=example,
+            detector,
+            artifact_path="model",
+            signature=signature,
+            input_example=example,
         )
         mlflow.set_tag("macro_test_roc_auc", f"{macro_auc:.4f}")
-        log.info(">>> %s  Macro ROC-AUC=%.4f | Macro F1=%.4f (run %s)",
-                 algo, macro_auc, macro_f1, parent.info.run_id)
+        log.info(
+            ">>> %s  Macro ROC-AUC=%.4f | Macro F1=%.4f (run %s)",
+            algo,
+            macro_auc,
+            macro_f1,
+            parent.info.run_id,
+        )
     return macro_auc, detector
 
 
@@ -219,22 +284,37 @@ def load_data(feature_subset=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento del detector multilabel (Fase 2.2)")
-    parser.add_argument("--algos", nargs="+",
-                        default=["logreg", "random_forest", "xgboost"],
-                        choices=["logreg", "random_forest", "xgboost"])
+    parser.add_argument(
+        "--algos",
+        nargs="+",
+        default=["logreg", "random_forest", "xgboost"],
+        choices=["logreg", "random_forest", "xgboost"],
+    )
     parser.add_argument("--n-iter", type=int, default=15, help="iteraciones de RandomizedSearch")
     parser.add_argument("--cv", type=int, default=3, help="folds de GroupKFold")
-    parser.add_argument("--sample", type=int, default=15000,
-                        help="submuestra para la búsqueda (0 = usar todo el train)")
-    parser.add_argument("--smoke", action="store_true",
-                        help="validación rápida (sample chico, n_iter=2, solo xgboost)")
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=15000,
+        help="submuestra para la búsqueda (0 = usar todo el train)",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="validación rápida (sample chico, n_iter=2, solo xgboost)",
+    )
     args = parser.parse_args()
 
     if args.smoke:
         args.algos, args.n_iter, args.cv, args.sample = ["xgboost"], 2, 2, 3000
 
-    results = run_training(args.algos, n_iter=args.n_iter, cv=args.cv, sample=args.sample,
-                           run_type="smoke" if args.smoke else "full")
+    results = run_training(
+        args.algos,
+        n_iter=args.n_iter,
+        cv=args.cv,
+        sample=args.sample,
+        run_type="smoke" if args.smoke else "full",
+    )
 
     log.info("=" * 60)
     best = max(results, key=results.get)
@@ -244,8 +324,15 @@ def main():
     log.info("Tracking: %s", config.MLFLOW_TRACKING_URI)
 
 
-def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000,
-                 run_type: str = "full", feature_subset=None, feature_set: str = "all") -> dict:
+def run_training(
+    algos,
+    n_iter: int = 15,
+    cv: int = 3,
+    sample: int = 15000,
+    run_type: str = "full",
+    feature_subset=None,
+    feature_set: str = "all",
+) -> dict:
     """Entrena los algoritmos indicados y devuelve {algo: macro_test_roc_auc}.
 
     Función reutilizable por el pipeline de Prefect (Fase 3).
@@ -256,12 +343,23 @@ def run_training(algos, n_iter: int = 15, cv: int = 3, sample: int = 15000,
     config.setup_mlflow(config.EXPERIMENT_DETECTOR)
     data = load_data(feature_subset)
     data_search.sample_n = None if sample == 0 else sample
-    log.info("Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s run_type=%s set=%s",
-             len(data[0]), len(data[3]), len(data[5]), algos, n_iter, cv,
-             data_search.sample_n, run_type, feature_set)
+    log.info(
+        "Train=%d Test=%d Features=%d | algos=%s n_iter=%d cv=%d sample=%s run_type=%s set=%s",
+        len(data[0]),
+        len(data[3]),
+        len(data[5]),
+        algos,
+        n_iter,
+        cv,
+        data_search.sample_n,
+        run_type,
+        feature_set,
+    )
     results = {}
     for algo in algos:
-        macro_auc, _ = train_algo(algo, data, n_iter, cv, run_type=run_type, feature_set=feature_set)
+        macro_auc, _ = train_algo(
+            algo, data, n_iter, cv, run_type=run_type, feature_set=feature_set
+        )
         results[algo] = macro_auc
     return results
 

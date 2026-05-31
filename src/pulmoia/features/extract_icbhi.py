@@ -30,15 +30,14 @@ Dependencias:
   pip install numpy scipy librosa pandas openpyxl tqdm
 """
 
-import re
 import argparse
-import warnings
 import logging
+import warnings
 from pathlib import Path
 
+import librosa
 import numpy as np
 import pandas as pd
-import librosa
 from scipy.signal import butter, sosfilt
 from tqdm import tqdm
 
@@ -53,26 +52,30 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ─── Parámetros globales ───────────────────────────────────────────────────────
-TARGET_SR  = 4_000   # Hz — igual que HF y TR
-HP_CUTOFF  = 80      # Hz
-HP_ORDER   = 10
-WINDOW_SEC = 1.0     # igual que HF y TR
-HOP_SEC    = 0.5     # igual que HF y TR
-N_MFCC     = 14
-N_FFT      = 512
-HOP_FFT    = 128
+TARGET_SR = 4_000  # Hz — igual que HF y TR
+HP_CUTOFF = 80  # Hz
+HP_ORDER = 10
+WINDOW_SEC = 1.0  # igual que HF y TR
+HOP_SEC = 0.5  # igual que HF y TR
+N_MFCC = 14
+N_FFT = 512
+HOP_FFT = 128
 
 # Equipos de grabación válidos en ICBHI
 VALID_EQUIPMENT = {"AKGC417L", "LittC2SE", "Litt3200", "Meditron"}
+
 
 # ─── Filtro pasa-altos ────────────────────────────────────────────────────────
 def build_highpass(cutoff=HP_CUTOFF, order=HP_ORDER, fs=TARGET_SR):
     return butter(order, cutoff, btype="high", fs=fs, output="sos")
 
+
 _HP_SOS = build_highpass()
+
 
 def apply_highpass(signal: np.ndarray) -> np.ndarray:
     return sosfilt(_HP_SOS, signal)
+
 
 # ─── Carga y preprocesamiento ─────────────────────────────────────────────────
 def load_and_preprocess(filepath: str) -> tuple:
@@ -83,6 +86,7 @@ def load_and_preprocess(filepath: str) -> tuple:
         resampled = True
     signal = apply_highpass(signal)
     return signal, TARGET_SR, sr_orig, resampled
+
 
 # ─── Parser de anotaciones ICBHI ─────────────────────────────────────────────
 def parse_annotation_file(txt_path: str) -> list[dict]:
@@ -98,7 +102,7 @@ def parse_annotation_file(txt_path: str) -> list[dict]:
     """
     cycles = []
     try:
-        with open(txt_path, "r", encoding="utf-8") as f:
+        with open(txt_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -107,16 +111,18 @@ def parse_annotation_file(txt_path: str) -> list[dict]:
                 if len(parts) < 4:
                     continue
                 try:
-                    t_start  = float(parts[0])
-                    t_end    = float(parts[1])
-                    crackle  = int(parts[2])
-                    wheeze   = int(parts[3])
-                    cycles.append({
-                        "start":   t_start,
-                        "end":     t_end,
-                        "crackle": crackle,
-                        "wheeze":  wheeze,
-                    })
+                    t_start = float(parts[0])
+                    t_end = float(parts[1])
+                    crackle = int(parts[2])
+                    wheeze = int(parts[3])
+                    cycles.append(
+                        {
+                            "start": t_start,
+                            "end": t_end,
+                            "crackle": crackle,
+                            "wheeze": wheeze,
+                        }
+                    )
                 except ValueError:
                     continue
     except Exception as e:
@@ -124,8 +130,7 @@ def parse_annotation_file(txt_path: str) -> list[dict]:
     return cycles
 
 
-def label_window_icbhi(t_start: float, t_end: float,
-                        cycles: list[dict]) -> dict:
+def label_window_icbhi(t_start: float, t_end: float, cycles: list[dict]) -> dict:
     """
     Etiqueta una ventana [t_start, t_end] según solapamiento con ciclos.
 
@@ -135,7 +140,7 @@ def label_window_icbhi(t_start: float, t_end: float,
     ICBHI no tiene stridor ni rhonchus → siempre 0.
     """
     has_crackle = 0
-    has_wheeze  = 0
+    has_wheeze = 0
 
     for cycle in cycles:
         # Solapamiento temporal
@@ -149,11 +154,12 @@ def label_window_icbhi(t_start: float, t_end: float,
             break
 
     return {
-        "has_wheeze":   has_wheeze,
-        "has_crackle":  has_crackle,
-        "has_stridor":  0,   # no disponible en ICBHI
-        "has_rhonchus": 0,   # no disponible en ICBHI
+        "has_wheeze": has_wheeze,
+        "has_crackle": has_crackle,
+        "has_stridor": 0,  # no disponible en ICBHI
+        "has_rhonchus": 0,  # no disponible en ICBHI
     }
+
 
 # ─── Parser de nombre de archivo ICBHI ───────────────────────────────────────
 def parse_icbhi_filename(stem: str) -> dict | None:
@@ -168,55 +174,60 @@ def parse_icbhi_filename(stem: str) -> dict | None:
         return None
     try:
         patient_id = parts[0]
-        rec_index  = parts[1]
-        location   = parts[2]
-        mode       = parts[3]
-        equipment  = "_".join(parts[4:])  # por si el equipo tiene _
+        rec_index = parts[1]
+        location = parts[2]
+        mode = parts[3]
+        equipment = "_".join(parts[4:])  # por si el equipo tiene _
         return {
             "patient_id": patient_id,
-            "rec_index":  rec_index,
-            "location":   location,
-            "mode":       mode,
-            "equipment":  equipment,
+            "rec_index": rec_index,
+            "location": location,
+            "mode": mode,
+            "equipment": equipment,
         }
     except Exception:
         return None
 
+
 # ─── Features espectrales ─────────────────────────────────────────────────────
 def aggregate(values: np.ndarray) -> tuple:
-    m  = float(np.mean(values))
-    s  = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
+    m = float(np.mean(values))
+    s = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
     cv = s / m if m != 0 else np.nan
     return m, s, cv
 
 
 def spectral_features_window(frame: np.ndarray, fs: int) -> dict:
-    feats  = {}
-    S_mag  = np.abs(librosa.stft(frame, n_fft=N_FFT, hop_length=HOP_FFT))
-    freqs  = librosa.fft_frequencies(sr=fs, n_fft=N_FFT)
-    power  = S_mag ** 2
+    feats = {}
+    S_mag = np.abs(librosa.stft(frame, n_fft=N_FFT, hop_length=HOP_FFT))
+    freqs = librosa.fft_frequencies(sr=fs, n_fft=N_FFT)
+    power = S_mag**2
     p_norm = power / (power.sum(axis=0, keepdims=True) + 1e-12)
 
     feats["SpectralCentroid"] = librosa.feature.spectral_centroid(
-        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT)[0]
+        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT
+    )[0]
     feats["SpectralSpread"] = librosa.feature.spectral_bandwidth(
-        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT)[0]
+        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT
+    )[0]
     feats["SpectralRolloffPoint"] = librosa.feature.spectral_rolloff(
-        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT, roll_percent=0.85)[0]
+        y=frame, sr=fs, n_fft=N_FFT, hop_length=HOP_FFT, roll_percent=0.85
+    )[0]
     feats["SpectralFlatness"] = librosa.feature.spectral_flatness(
-        y=frame, n_fft=N_FFT, hop_length=HOP_FFT)[0]
+        y=frame, n_fft=N_FFT, hop_length=HOP_FFT
+    )[0]
 
     flux = np.sqrt(np.sum(np.diff(S_mag, axis=1) ** 2, axis=0))
     feats["SpectralFlux"] = flux if len(flux) > 0 else np.array([0.0])
 
-    mu1   = (freqs[:, None] * p_norm).sum(axis=0)
-    mu2   = (((freqs[:, None] - mu1) ** 2) * p_norm).sum(axis=0)
-    mu3   = (((freqs[:, None] - mu1) ** 3) * p_norm).sum(axis=0)
+    mu1 = (freqs[:, None] * p_norm).sum(axis=0)
+    mu2 = (((freqs[:, None] - mu1) ** 2) * p_norm).sum(axis=0)
+    mu3 = (((freqs[:, None] - mu1) ** 3) * p_norm).sum(axis=0)
     sigma = np.sqrt(mu2) + 1e-12
-    feats["SpectralSkewness"] = mu3 / sigma ** 3
+    feats["SpectralSkewness"] = mu3 / sigma**3
 
     mu4 = (((freqs[:, None] - mu1) ** 4) * p_norm).sum(axis=0)
-    feats["SpectralKurtosis"] = mu4 / sigma ** 4
+    feats["SpectralKurtosis"] = mu4 / sigma**4
 
     p_safe = np.where(p_norm > 1e-12, p_norm, 1e-12)
     feats["SpectralEntropy"] = -np.sum(p_safe * np.log2(p_safe), axis=0)
@@ -228,47 +239,54 @@ def spectral_features_window(frame: np.ndarray, fs: int) -> dict:
     den_sl = ((freqs - f_mean) ** 2).sum() + 1e-12
     feats["SpectralSlope"] = num_sl / den_sl
 
-    K      = len(freqs)
-    k_idx  = np.arange(1, K)
+    K = len(freqs)
+    k_idx = np.arange(1, K)
     num_dc = ((S_mag[1:] - S_mag[[0]]) / (k_idx[:, None] + 1e-12)).sum(axis=0)
     den_dc = S_mag[1:].sum(axis=0) + 1e-12
     feats["SpectralDecrease"] = num_dc / den_dc
 
-    mfcc   = librosa.feature.mfcc(y=frame, sr=fs, n_mfcc=N_MFCC,
-                                   n_fft=N_FFT, hop_length=HOP_FFT)
+    mfcc = librosa.feature.mfcc(y=frame, sr=fs, n_mfcc=N_MFCC, n_fft=N_FFT, hop_length=HOP_FFT)
     delta1 = librosa.feature.delta(mfcc)
     delta2 = librosa.feature.delta(mfcc, order=2)
-    feats["MFCC"]             = mfcc.T
-    feats["MFCC_delta"]       = delta1.T
+    feats["MFCC"] = mfcc.T
+    feats["MFCC_delta"] = delta1.T
     feats["MFCC_delta_delta"] = delta2.T
     return feats
 
 
 SCALAR_KEYS = [
-    "SpectralCentroid", "SpectralSpread", "SpectralRolloffPoint",
-    "SpectralFlatness", "SpectralFlux", "SpectralSkewness",
-    "SpectralKurtosis", "SpectralEntropy", "SpectralCrest",
-    "SpectralSlope", "SpectralDecrease",
+    "SpectralCentroid",
+    "SpectralSpread",
+    "SpectralRolloffPoint",
+    "SpectralFlatness",
+    "SpectralFlux",
+    "SpectralSkewness",
+    "SpectralKurtosis",
+    "SpectralEntropy",
+    "SpectralCrest",
+    "SpectralSlope",
+    "SpectralDecrease",
 ]
 VECTOR_KEYS = ["MFCC", "MFCC_delta", "MFCC_delta_delta"]
 
 
 def extract_window_features(frame: np.ndarray, fs: int) -> dict:
-    fw  = spectral_features_window(frame, fs)
+    fw = spectral_features_window(frame, fs)
     row = {}
     for k in SCALAR_KEYS:
         m, s, cv = aggregate(fw[k])
-        row[f"{k}_mean"]  = m
-        row[f"{k}_std"]   = s
+        row[f"{k}_mean"] = m
+        row[f"{k}_std"] = s
         row[f"{k}_coefv"] = cv
     for k in VECTOR_KEYS:
         mat = fw[k]
         for i in range(N_MFCC):
             m, s, cv = aggregate(mat[:, i])
-            row[f"{k}_mean_{i+1}"]  = m
-            row[f"{k}_std_{i+1}"]   = s
+            row[f"{k}_mean_{i+1}"] = m
+            row[f"{k}_std_{i+1}"] = s
             row[f"{k}_coefv_{i+1}"] = cv
     return row
+
 
 # ─── Pipeline principal ───────────────────────────────────────────────────────
 def run_extraction(folder: str, output: str):
@@ -284,14 +302,20 @@ def run_extraction(folder: str, output: str):
         return
 
     log.info("Encontrados %d archivos .wav en %s", len(wav_files), folder)
-    log.info("Parámetros: target_sr=%d Hz | highpass=%d Hz orden %d | "
-             "ventana=%.1fs solapamiento=%.0f%%",
-             TARGET_SR, HP_CUTOFF, HP_ORDER, WINDOW_SEC, HOP_SEC * 100)
+    log.info(
+        "Parámetros: target_sr=%d Hz | highpass=%d Hz orden %d | "
+        "ventana=%.1fs solapamiento=%.0f%%",
+        TARGET_SR,
+        HP_CUTOFF,
+        HP_ORDER,
+        WINDOW_SEC,
+        HOP_SEC * 100,
+    )
 
     win_samples = int(WINDOW_SEC * TARGET_SR)
-    hop_samples = int(HOP_SEC   * TARGET_SR)
+    hop_samples = int(HOP_SEC * TARGET_SR)
 
-    rows    = []
+    rows = []
     skipped = []
     resampled_count = 0
 
@@ -332,8 +356,8 @@ def run_extraction(folder: str, output: str):
 
         for s_idx in starts:
             t_start = s_idx / fs
-            t_end   = (s_idx + win_samples) / fs
-            frame   = signal[s_idx:s_idx + win_samples]
+            t_end = (s_idx + win_samples) / fs
+            frame = signal[s_idx : s_idx + win_samples]
 
             try:
                 feat_row = extract_window_features(frame, fs)
@@ -344,16 +368,16 @@ def run_extraction(folder: str, output: str):
             win_labels = label_window_icbhi(t_start, t_end, cycles)
 
             row = {
-                "filename":    fname,
-                "source":      "ICBHI",
-                "patient_id":  meta["patient_id"],
-                "location":    meta["location"],
-                "mode":        meta["mode"],
-                "equipment":   meta["equipment"],
-                "t_start_s":   round(t_start, 3),
-                "t_end_s":     round(t_end,   3),
+                "filename": fname,
+                "source": "ICBHI",
+                "patient_id": meta["patient_id"],
+                "location": meta["location"],
+                "mode": meta["mode"],
+                "equipment": meta["equipment"],
+                "t_start_s": round(t_start, 3),
+                "t_end_s": round(t_end, 3),
                 "sr_original": sr_orig,
-                "resampled":   resampled,
+                "resampled": resampled,
             }
             row.update(win_labels)
             row.update(feat_row)
@@ -366,17 +390,26 @@ def run_extraction(folder: str, output: str):
     df = pd.DataFrame(rows)
 
     # Reordenar columnas: metadatos → etiquetas → features
-    meta_cols  = ["filename", "source", "patient_id", "location",
-                  "mode", "equipment", "t_start_s", "t_end_s",
-                  "sr_original", "resampled"]
+    meta_cols = [
+        "filename",
+        "source",
+        "patient_id",
+        "location",
+        "mode",
+        "equipment",
+        "t_start_s",
+        "t_end_s",
+        "sr_original",
+        "resampled",
+    ]
     label_cols = ["has_wheeze", "has_crackle", "has_stridor", "has_rhonchus"]
-    feat_cols  = [c for c in df.columns if c not in meta_cols + label_cols]
+    feat_cols = [c for c in df.columns if c not in meta_cols + label_cols]
     df = df[meta_cols + label_cols + feat_cols]
 
     # Guardar
-    out_base  = Path(output)
+    out_base = Path(output)
     out_base.parent.mkdir(parents=True, exist_ok=True)
-    csv_path  = out_base.with_suffix(".csv")
+    csv_path = out_base.with_suffix(".csv")
     xlsx_path = out_base.with_suffix(".xlsx")
 
     df.to_csv(csv_path, index=False)
@@ -384,23 +417,21 @@ def run_extraction(folder: str, output: str):
 
     # Reporte
     log.info("─" * 55)
-    log.info("✅  Ventanas extraídas: %d filas × %d columnas",
-             len(df), len(df.columns))
+    log.info("✅  Ventanas extraídas: %d filas × %d columnas", len(df), len(df.columns))
     log.info("   CSV  → %s", csv_path)
     log.info("   XLSX → %s", xlsx_path)
-    log.info("   Archivos procesados: %d | Omitidos: %d",
-             len(wav_files) - len(skipped), len(skipped))
+    log.info(
+        "   Archivos procesados: %d | Omitidos: %d", len(wav_files) - len(skipped), len(skipped)
+    )
     if resampled_count:
-        log.info("   Archivos resampleados a %d Hz: %d",
-                 TARGET_SR, resampled_count)
+        log.info("   Archivos resampleados a %d Hz: %d", TARGET_SR, resampled_count)
 
     # Distribución de etiquetas
     log.info("\nDistribución de etiquetas (ventanas positivas):")
     for col in label_cols:
         n_pos = int(df[col].sum())
-        pct   = n_pos / len(df) * 100
-        log.info("   %-15s: %6d / %d ventanas (%.1f%%)",
-                 col, n_pos, len(df), pct)
+        pct = n_pos / len(df) * 100
+        log.info("   %-15s: %6d / %d ventanas (%.1f%%)", col, n_pos, len(df), pct)
 
     # Distribución por equipo
     log.info("\nDistribución por equipo de grabación:")
@@ -419,9 +450,9 @@ if __name__ == "__main__":
         description="Extracción de features espectrales — ICBHI 2017 (por ventana)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--folder",  required=True,
-                        help="Carpeta con archivos .wav y .txt de ICBHI")
-    parser.add_argument("--output",  default="outputs/features_ICBHI",
-                        help="Prefijo de salida (.csv y .xlsx)")
+    parser.add_argument("--folder", required=True, help="Carpeta con archivos .wav y .txt de ICBHI")
+    parser.add_argument(
+        "--output", default="outputs/features_ICBHI", help="Prefijo de salida (.csv y .xlsx)"
+    )
     args = parser.parse_args()
     run_extraction(args.folder, args.output)
