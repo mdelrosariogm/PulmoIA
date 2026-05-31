@@ -153,6 +153,13 @@ function startProcessing() {
     const fd = new FormData();
     fd.append('audio', selectedFile);
     fd.append('role', currentRole);
+    const nm = document.getElementById('patientName');
+    const ag = document.getElementById('patientAge');
+    if (nm && nm.value.trim()) fd.append('patient_name', nm.value.trim());
+    if (ag && ag.value) fd.append('patient_age', ag.value);
+    const symptoms = Array.from(document.querySelectorAll('.symptom-check input:checked'))
+      .map(c => (c.parentElement.textContent || '').trim()).filter(Boolean);
+    if (symptoms.length) fd.append('symptoms', symptoms.join(', '));
     resultPromise = fetch('/api/v1/analyze', { method: 'POST', body: fd })
       .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
       .catch(err => { console.error('Error de análisis:', err); return null; });
