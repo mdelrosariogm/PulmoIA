@@ -17,6 +17,53 @@ Esta arquitectura en dos etapas permite que el pipeline sea **escalable**: nueva
 
 ---
 
+## 🚀 Ejecutar la Aplicación Web
+
+PulmoIA incluye una **aplicación web funcional** (`webapp/`): subes un audio de auscultación y
+obtiene la **severidad COPD0–4** con su perfil acústico y la probabilidad de cada nivel.
+
+### Opción A — Docker (recomendada, sin instalar nada más)
+
+> Requiere [Docker Desktop](https://www.docker.com/products/docker-desktop/) abierto (“Engine running”).
+
+```bash
+# 1. (una vez) generar el modelo empaquetado
+python -m pulmoia.serving.bundle          # o: .venv/Scripts/python.exe -m pulmoia.serving.bundle
+
+# 2. Construir la imagen
+docker build -t pulmoia:latest .
+
+# 3. Ejecutar
+docker run --rm -p 8080:8080 pulmoia:latest
+```
+Abrir en el navegador: **http://localhost:8080**
+(El primer arranque tarda ~30–60 s por el *warmup*; detener con `Ctrl + C`.)
+
+### Opción B — Local con uv (sin Docker)
+
+```bash
+uv sync --extra mlops --extra api          # entorno Python 3.11
+uv run python -m pulmoia.serving.bundle    # genera el modelo empaquetado (una vez)
+uv run uvicorn main:app --app-dir webapp/backend --port 8080
+```
+Abrir: **http://localhost:8080**
+
+> En Windows, si `uv run` falla, usa el intérprete del entorno directamente:
+> `.venv\Scripts\python.exe -m uvicorn main:app --app-dir webapp/backend --port 8080`
+
+### Cómo usarla
+1. **Comenzar análisis** → elige rol (Médico / Paciente).
+2. Sube un `.wav` de auscultación (ejemplos en `data/RDB/`, p. ej. `H016_L1.wav`).
+3. Completa nombre/edad/síntomas → **Analizar audio**.
+4. Verás el **nivel COPD0–4 real** con su confianza; las pestañas superiores muestran la
+   **probabilidad de cada nivel** (clic para navegar). El menú **“Modelo”** detalla el entrenamiento.
+
+> ⚠️ Herramienta de **apoyo/cribado**, no diagnóstica. El clasificador COPD es orientativo
+> (entrenado con ~40 pacientes); el detector de sonidos es la parte validada (Macro ROC-AUC ~0.82).
+> Requiere los datos/artefactos locales (audio, `mlflow.db`, `models/`) — ver `docs/HANDOFF.md`.
+
+---
+
 ## 🗄️ Bases de Datos
 
 ### 1. RespiratoryDatabase@TR (TR)
