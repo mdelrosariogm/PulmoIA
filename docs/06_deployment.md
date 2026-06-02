@@ -74,17 +74,18 @@ curl -X POST http://127.0.0.1:8000/predict \
 # 1. Generar el bundle (si no existe)
 uv run python -m pulmoia.serving.bundle
 
-# 2. Construir la imagen
-docker build -t pulmoia-api:latest .
+# 2. Construir la imagen (la web app: UI + API)
+docker build -t pulmoia:latest .
 
 # 3. Ejecutar
-docker run --rm -p 8000:8000 pulmoia-api:latest
-# Probar: curl http://localhost:8000/health
+docker run --rm -p 8080:8080 pulmoia:latest
+# Abrir la web: http://localhost:8080   ·   API: http://localhost:8080/api/v1/analyze
 ```
 
 - La imagen usa `python:3.11-slim` + `uv sync --extra api --no-dev` (sin MLflow/Prefect/dev).
-- `libsndfile1` y `ffmpeg` para audio. `HEALTHCHECK` contra `/health`.
-- `.dockerignore` excluye datos pesados; solo se copia `models/serving_bundle.pkl`.
+- `libsndfile1` y `ffmpeg` para audio. `HEALTHCHECK` contra `/health` (start-period 60s por el warmup).
+- Sirve la **web app completa** (`webapp/`): UI en `/` y API en `/api/v1`.
+- `.dockerignore` excluye datos pesados, el video `.mp4` y todo `models/` salvo `serving_bundle.pkl`.
 
 > **Optimización (nice-to-have):** mover dependencias no usadas en serving (shap, sweetviz,
 > skrebate, matplotlib) a un extra aparte para aligerar la imagen; build multi-stage.

@@ -6,6 +6,8 @@ mlruns/
 mlflow.db
 *.rar
 *.zip
+*.mp4
+.claude/
 
 # Modelos: ignorar todo MENOS el bundle servible
 models/
